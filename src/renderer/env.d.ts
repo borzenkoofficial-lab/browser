@@ -25,6 +25,8 @@ declare global {
       saveObjects(records: unknown[]): Promise<boolean>;
       listFinance(): Promise<unknown[]>;
       saveFinance(records: unknown[]): Promise<boolean>;
+      listSuppliers(): Promise<unknown[]>;
+      saveSuppliers(records: unknown[]): Promise<boolean>;
       createBackup(): Promise<{ cancelled: boolean; path?: string; integrity?: string }>;
       restoreBackup(): Promise<{ cancelled: boolean; restored?: boolean; safetyBackupPath?: string }>;
       getVersion(): Promise<string>;
