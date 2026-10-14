@@ -202,7 +202,7 @@ describe("SQLite repository storage", () => {
 
   it("rejects suppliers with invalid delivery times or ratings", async () => {
     await setup();
-    expect(() => replaceRecords("suppliers", [{ id: "sup2", name: "Поставщик", deliveryDays: -1, rating: 3 }])).toThrow(/срок поставки/);
+    expect(() => replaceRecords("suppliers", [{ id: "sup2", name: "Поставщик", deliveryDays: -1, rating: 3 }])).toThrow(/Срок поставки/);
     expect(() => replaceRecords("suppliers", [{ id: "sup3", name: "Поставщик", deliveryDays: 2, rating: 6 }])).toThrow(/Оценка поставщика/);
     expect(listRecords("suppliers")).toEqual([]);
   });
