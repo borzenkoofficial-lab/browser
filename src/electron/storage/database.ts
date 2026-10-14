@@ -1,5 +1,6 @@
 import Database from "better-sqlite3";
 import fs from "node:fs/promises";
+import * as fsSync from "node:fs";
 import path from "node:path";
 import { validateBookmark, validateHistoryItem, validateProspect, requireArray } from "./validation";
 
@@ -26,8 +27,6 @@ function db(): Database.Database {
 }
 
 function readLegacyRecords(filePath: string, kind: DataKind): StoredRecord[] {
-  // Kept synchronous to run inside the startup migration transaction.
-  const fsSync = require("node:fs") as typeof import("node:fs");
   if (!fsSync.existsSync(filePath)) return [];
   let parsed: unknown;
   try {
@@ -134,7 +133,6 @@ function saveRows(database: Database.Database, kind: DataKind, records: StoredRe
 }
 
 function migrateLegacy(database: Database.Database, userDataPath: string): void {
-  const fsSync = require("node:fs") as typeof import("node:fs");
   const migration = database.transaction(() => {
     const marker = database.prepare("SELECT value FROM app_metadata WHERE key = ?").get("legacy_json_import_v1");
     if (marker) return;
