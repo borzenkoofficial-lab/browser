@@ -124,7 +124,33 @@ ipcMain.handle("browser:state", (_event, id: string) => {
 ipcMain.handle("browser:extract", async (_event, id: string) => {
   const view = browserViews.get(id);
   if (!view) throw new Error("Вкладка не найдена");
-  const page = await view.webContents.executeJavaScript("({ title: document.title || \"\", description: document.querySelector(\"meta[name='description']\")?.content || \"\", text: (document.body?.innerText || \"\").slice(0, 100000) })");
+  // Capture visible application data only; credentials and sensitive payment fields are excluded.
+  const page = await view.webContents.executeJavaScript(`(() => {
+    const visible = el => { const s = getComputedStyle(el), r = el.getBoundingClientRect(); return s.display !== "none" && s.visibility !== "hidden" && r.width > 0 && r.height > 0; };
+    const labelFor = el => {
+      const label = el.labels && el.labels.length ? Array.from(el.labels).map(x => x.innerText.trim()).filter(Boolean).join(" / ") : "";
+      return (label || el.closest("label")?.innerText || el.getAttribute("aria-label") || el.getAttribute("placeholder") || el.getAttribute("name") || el.id || "Поле").trim().slice(0, 160);
+    };
+    const sensitive = /password|passwd|парол|карт[аы]|card.?number|cvv|cvc|security.?code|token|secret|authorization|паспорт|passport|снилс|bank.?account|номер.?сч[её]та/i;
+    const formFields = Array.from(document.querySelectorAll("input,textarea,select"))
+      .filter(el => visible(el) && !["hidden","password","file","image","submit","button","reset"].includes((el.type || "").toLowerCase()))
+      .filter(el => !sensitive.test([el.name,el.id,el.autocomplete,el.getAttribute("placeholder"),labelFor(el)].filter(Boolean).join(" ")))
+      .map(el => {
+        const type = (el.type || el.tagName.toLowerCase()).toLowerCase();
+        let value = "";
+        if (type === "checkbox" || type === "radio") value = el.checked ? (el.value || "Да") : "";
+        else if (el.tagName === "SELECT") value = Array.from(el.selectedOptions).map(o => o.textContent.trim()).join(", ");
+        else value = (el.value || "").trim();
+        return { label: labelFor(el), value: String(value).slice(0, 1200), type };
+      }).filter(x => x.value).slice(0, 100);
+    const links = Array.from(document.querySelectorAll("a[href]")).filter(visible)
+      .map(a => ({ text: (a.innerText || a.getAttribute("aria-label") || "").trim().replace(/\\s+/g," ").slice(0,180), url: a.href }))
+      .filter(a => a.text && /^https?:$/.test(new URL(a.url,location.href).protocol)).slice(0,100);
+    const headings = Array.from(document.querySelectorAll("h1,h2,h3")).filter(visible).map(h => (h.innerText || "").trim()).filter(Boolean).slice(0,30);
+    const tables = Array.from(document.querySelectorAll("table")).filter(visible).map(t => (t.innerText || "").trim().replace(/\\n{3,}/g,"\\n\\n")).filter(Boolean).slice(0,10);
+    return { title: document.title || "", description: document.querySelector("meta[name='description']")?.content || "",
+      text: (document.body?.innerText || "").slice(0,100000), headings, formFields, links, tables };
+  })()`);
   return { url: view.webContents.getURL(), ...page };
 });
 ipcMain.handle("prospects:list", () => listRecords("prospects"));
