@@ -23,8 +23,8 @@ describe("local storage validation", () => {
 
   it("validates supplier delivery time, rating, status and website", () => {
     expect(validateSupplier({ id: "s1", name: "ООО Тест", deliveryDays: 3, rating: 4, status: "Активен", website: "https://example.ru" })).toMatchObject({ id: "s1", name: "ООО Тест", deliveryDays: 3, rating: 4 });
-    expect(() => validateSupplier({ id: "s1", name: "ООО Тест", deliveryDays: -1 })).toThrow(/срок поставки/);
-    expect(() => validateSupplier({ id: "s1", name: "ООО Тест", rating: 6 })).toThrow(/оценка поставщика/);
+    expect(() => validateSupplier({ id: "s1", name: "ООО Тест", deliveryDays: -1 })).toThrow(/Срок поставки/);
+    expect(() => validateSupplier({ id: "s1", name: "ООО Тест", rating: 6 })).toThrow(/Оценка поставщика/);
     expect(() => validateSupplier({ id: "s1", name: "ООО Тест", website: "javascript:alert(1)" })).toThrow(/HTTP/);
     expect(() => validateSupplier({ id: "s1", name: "ООО Тест", status: "Неизвестен" })).toThrow(/статус/);
   });
