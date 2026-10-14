@@ -62,6 +62,26 @@ describe("SQLite repository storage", () => {
     expect(await fs.readFile(path.join(tempDir, "prospects.json"), "utf8")).toBe(broken);
   });
 
+  it("rejects a corrupt backup without changing the active database", async () => {
+    await setup();
+    replaceRecords("prospects", [{ id: "p1", company: "Данные должны сохраниться" }]);
+    const badBackup = path.join(tempDir, "backups", "corrupt.sqlite");
+    await fs.mkdir(path.dirname(badBackup), { recursive: true });
+    await fs.writeFile(badBackup, "not a SQLite database");
+    await expect(restoreBackup(badBackup)).rejects.toThrow();
+    expect(listRecords("prospects")).toMatchObject([{ id: "p1", company: "Данные должны сохраниться" }]);
+  });
+
+  it("rolls back duplicate record IDs without losing the existing dataset", async () => {
+    await setup();
+    replaceRecords("prospects", [{ id: "p1", company: "Сохранённая компания" }]);
+    expect(() => replaceRecords("prospects", [
+      { id: "p2", company: "Первая новая компания" },
+      { id: "p2", company: "Дубликат" }
+    ])).toThrow();
+    expect(listRecords("prospects")).toMatchObject([{ id: "p1", company: "Сохранённая компания" }]);
+  });
+
   it("creates and restores a verified backup", async () => {
     await setup();
     replaceRecords("prospects", [{ id: "p1", company: "Исходная компания" }]);
