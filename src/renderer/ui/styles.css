@@ -16,3 +16,5 @@
 .settings-actions button:disabled{opacity:.5;cursor:wait}
 
 .follow-up{display:inline-flex;align-items:center;width:max-content;max-width:100%;font-size:9px;color:#8bd9b5;background:#203b34;border:1px solid #315548;border-radius:5px;padding:3px 6px;margin-top:3px}.follow-up.overdue{color:#ffaaa8;background:#45292d;border-color:#67383e;font-weight:700}.contact-cell small{white-space:nowrap}
+
+.status-select{max-width:145px;min-width:118px;border:1px solid var(--border,#34404f);border-radius:8px;background:var(--panel,#1b2430);color:inherit;padding:7px 26px 7px 9px;font:inherit;font-size:12px;cursor:pointer}.status-select:focus{outline:2px solid var(--accent,#6c9bff);outline-offset:1px}
