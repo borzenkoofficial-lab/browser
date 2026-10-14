@@ -19,6 +19,8 @@ declare global {
       saveHistory(records: unknown[]): Promise<boolean>;
       listEstimates(): Promise<unknown[]>;
       saveEstimates(records: unknown[]): Promise<boolean>;
+      listDocuments(): Promise<unknown[]>;
+      saveDocuments(records: unknown[]): Promise<boolean>;
       createBackup(): Promise<{ cancelled: boolean; path?: string; integrity?: string }>;
       restoreBackup(): Promise<{ cancelled: boolean; restored?: boolean; safetyBackupPath?: string }>;
       getVersion(): Promise<string>;
