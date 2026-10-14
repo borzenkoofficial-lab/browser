@@ -3,7 +3,7 @@ import { parseProspectsCsv } from "../lib/csv";
 import {
   Activity, ArrowDownToLine, ArrowLeft, ArrowRight, Bell, Bookmark,
   Building2, Check, ChevronDown, CircleHelp, Command, Compass, Download, ExternalLink,
-  FileSpreadsheet, Filter, Globe2, LayoutDashboard, ListFilter, Menu,
+  FileSpreadsheet, Filter, Globe2, History as HistoryIcon, LayoutDashboard, ListFilter, Menu,
   MoreHorizontal, Plus, Search, Settings2, ShieldCheck, Sparkles, Star, Target,
   Trash2, Users, WandSparkles, X, Zap
 } from "lucide-react";
@@ -14,7 +14,9 @@ type Prospect = {
   source: string; notes: string; createdAt: string;
 };
 type Tab = { id: string; title: string; url: string };
-type Section = "home" | "prospects" | "research" | "saved" | "settings";
+type BookmarkItem = { id: string; title: string; url: string; createdAt: string };
+type HistoryItem = { id: string; title: string; url: string; visitedAt: string };
+type Section = "home" | "prospects" | "research" | "saved" | "history" | "settings";
 
 const starterProspects: Prospect[] = [];
 const makeId = () => crypto.randomUUID();
@@ -27,6 +29,8 @@ function App() {
   const [address, setAddress] = useState("");
   const [pageError, setPageError] = useState("");
   const [prospects, setProspects] = useState<Prospect[]>(starterProspects);
+  const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [prospectQuery, setProspectQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Все статусы");
   const [showAdd, setShowAdd] = useState(false);
@@ -47,9 +51,18 @@ function App() {
     void window.nexus.listProspects().then((items) => {
       if (Array.isArray(items)) setProspects(items as Prospect[]);
     }).catch(() => notify("Не удалось загрузить локальную базу"));
+    void window.nexus.listBookmarks().then(items => { if (Array.isArray(items)) setBookmarks(items as BookmarkItem[]); }).catch(() => undefined);
+    void window.nexus.listHistory().then(items => { if (Array.isArray(items)) setHistory(items as HistoryItem[]); }).catch(() => undefined);
     void window.nexus.getVersion().then(setVersion).catch(() => undefined);
     const offTitle = window.nexus.onTitle(({ id, title }) => setTabs(prev => prev.map(t => t.id === id ? { ...t, title: title || shortHost(t.url) } : t)));
-    const offNavigate = window.nexus.onNavigate(({ id, url }) => setTabs(prev => prev.map(t => t.id === id ? { ...t, url, title: shortHost(url) } : t)));
+    const offNavigate = window.nexus.onNavigate(({ id, url }) => {
+      setTabs(prev => prev.map(t => t.id === id ? { ...t, url, title: shortHost(url) } : t));
+      setHistory(prev => {
+        const next: HistoryItem[] = [{ id: makeId(), title: shortHost(url), url, visitedAt: new Date().toISOString() }, ...prev.filter(item => item.url !== url)].slice(0, 500);
+        void window.nexus.saveHistory(next);
+        return next;
+      });
+    });
     const offError = window.nexus.onError(({ id, description }) => {
       if (id === activeTab) setPageError(description || "Не удалось загрузить страницу");
     });
@@ -143,6 +156,28 @@ function App() {
     setShowAdd(true);
   };
 
+  const bookmarkCurrentSite = async () => {
+    if (!active) { notify("Откройте сайт, чтобы добавить его в закладки"); return; }
+    if (bookmarks.some(item => item.url === active.url)) { notify("Этот сайт уже в закладках"); return; }
+    const next = [{ id: makeId(), title: active.title || shortHost(active.url), url: active.url, createdAt: new Date().toISOString() }, ...bookmarks];
+    setBookmarks(next);
+    await window.nexus.saveBookmarks(next);
+    notify("Сайт добавлен в закладки");
+  };
+
+  const removeBookmark = async (id: string) => {
+    const next = bookmarks.filter(item => item.id !== id);
+    setBookmarks(next);
+    await window.nexus.saveBookmarks(next);
+  };
+
+  const clearHistory = async () => {
+    if (!confirm("Очистить историю посещений?")) return;
+    setHistory([]);
+    await window.nexus.saveHistory([]);
+    notify("История очищена");
+  };
+
   const resetForm = () => setForm({ company: "", website: "", contact: "", email: "", phone: "", industry: "Строительство", status: "Новый", source: "Сайт компании", notes: "" });
 
   const saveForm = async () => {
@@ -218,7 +253,8 @@ function App() {
         <NavItem icon={<LayoutDashboard size={18}/>} label="Обзор" active={section === "home" && !activeTab} compact={sidebarCompact} onClick={() => goSection("home")} />
         <NavItem icon={<Target size={18}/>} label="Поиск клиентов" active={section === "research"} compact={sidebarCompact} onClick={() => goSection("research")} />
         <NavItem icon={<Building2 size={18}/>} label="База компаний" active={section === "prospects"} count={prospects.length || undefined} compact={sidebarCompact} onClick={() => goSection("prospects")} />
-        <NavItem icon={<Bookmark size={18}/>} label="Сохранённое" active={section === "saved"} compact={sidebarCompact} onClick={() => goSection("saved")} />
+        <NavItem icon={<Bookmark size={18}/>} label="Закладки и сайты" active={section === "saved"} compact={sidebarCompact} onClick={() => goSection("saved")} />
+        <NavItem icon={<HistoryIcon size={18}/>} label="История" active={section === "history"} compact={sidebarCompact} onClick={() => goSection("history")} />
       </nav>
       <div className="nav-label nav-label-spaced">{!sidebarCompact && "ИНСТРУМЕНТЫ"}</div>
       <nav className="main-nav">
@@ -268,7 +304,7 @@ function App() {
           <button type="submit" title="Перейти"><ArrowRight size={16}/></button>
         </form>
         <button className={`toolbar-action ${activeTab ? "" : "toolbar-action-primary"}`} onClick={saveCurrentSite}><Bookmark size={15}/><span>Сохранить компанию</span></button>
-        <button className="icon-button" title="Закладки" onClick={() => goSection("saved")}><Star size={17}/></button>
+        <button className="icon-button" title="Добавить сайт в закладки" onClick={() => void bookmarkCurrentSite()}><Star size={17}/></button>
       </div>
 
       <div className="content-region">
@@ -276,7 +312,8 @@ function App() {
           {section === "home" && <Dashboard prospects={prospects} onSearch={q => { setAddress(q); void openTab("https://www.google.com/search?q=" + encodeURIComponent(q)); }} onSection={goSection} onAdd={() => { resetForm(); setEditing(null); setShowAdd(true); }} onExport={exportCsv}/>}
           {section === "research" && <Research onSearch={q => { setAddress(q); void openTab("https://www.google.com/search?q=" + encodeURIComponent(q)); }} onSave={() => { resetForm(); setForm(p => ({ ...p, source: "Поиск клиентов" })); setShowAdd(true); }}/>}
           {section === "prospects" && <ProspectsPage prospects={filtered} query={prospectQuery} setQuery={setProspectQuery} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onAdd={() => { resetForm(); setEditing(null); setShowAdd(true); }} onEdit={editProspect} onDelete={id => { if (confirm("Удалить компанию из локальной базы?")) void persistProspects(prospects.filter(p => p.id !== id)); }} onExport={exportCsv} onOpen={url => void openTab(url)} onImport={importCsv}/>}
-          {section === "saved" && <SavedPage prospects={prospects} onOpen={url => void openTab(url)} onSection={goSection}/>}
+          {section === "saved" && <SavedPage bookmarks={bookmarks} prospects={prospects} onOpen={url => void openTab(url)} onSection={goSection} onRemoveBookmark={id => void removeBookmark(id)}/>}
+          {section === "history" && <HistoryPage history={history} onOpen={url => void openTab(url)} onClear={clearHistory}/>}
           {section === "settings" && <SettingsPage version={version}/>}
         </div>}
       </div>
@@ -379,10 +416,23 @@ function StatusBadge({ status }: { status: Prospect["status"] }) {
   return <span className={`status-badge ${className}`}><span/>{status}</span>;
 }
 
-function SavedPage({ prospects, onOpen, onSection }: { prospects: Prospect[]; onOpen: (url: string) => void; onSection: (s: Section) => void }) {
-  const saved = prospects.filter(p => p.website);
-  return <div className="standard-page"><PageHeader eyebrow="БЫСТРЫЙ ДОСТУП" title="Сохранённое" description="Сайты компаний, добавленные в вашу локальную базу."/>
-    {saved.length ? <div className="saved-grid">{saved.map(p => <button className="saved-card" key={p.id} onClick={() => onOpen(p.website)}><div className="saved-card-icon"><Globe2 size={20}/></div><b>{p.company}</b><span>{shortHost(p.website)}</span><ExternalLink size={15} className="saved-external"/></button>)}</div> : <div className="panel empty-state large-empty"><div className="empty-icon"><Bookmark size={24}/></div><h3>Здесь появятся сохранённые сайты</h3><p>Добавьте компанию с адресом сайта — она появится в этом разделе.</p><button className="button button-secondary" onClick={() => onSection("prospects")}>Открыть базу компаний <ArrowRight size={15}/></button></div>}
+function SavedPage({ bookmarks, prospects, onOpen, onSection, onRemoveBookmark }: { bookmarks: BookmarkItem[]; prospects: Prospect[]; onOpen: (url: string) => void; onSection: (s: Section) => void; onRemoveBookmark: (id: string) => void }) {
+  const savedCompanies = prospects.filter(p => p.website);
+  return <div className="standard-page"><PageHeader eyebrow="БЫСТРЫЙ ДОСТУП" title="Закладки и сайты" description="Сохранённые страницы браузера и сайты компаний из вашей базы."/>
+    <div className="subsection-heading"><div><h2>Закладки браузера</h2><p>Сайты, которые вы сохранили вручную</p></div></div>
+    {bookmarks.length ? <div className="saved-grid">{bookmarks.map(item => <div className="saved-card" key={item.id}><button className="saved-card-open" onClick={() => onOpen(item.url)}><span className="saved-card-icon"><Bookmark size={20}/></span><b>{item.title || shortHost(item.url)}</b><span>{shortHost(item.url)}</span></button><button className="saved-remove" title="Удалить закладку" onClick={() => onRemoveBookmark(item.id)}><X size={14}/></button><ExternalLink size={15} className="saved-external"/></div>)}</div> : <div className="panel inline-empty"><Bookmark size={17}/><span>Пока нет закладок. Откройте сайт и нажмите на звёздочку в панели браузера.</span></div>}
+    <div className="subsection-heading subsection-spaced"><div><h2>Сайты компаний</h2><p>Адреса из клиентской базы</p></div><button className="text-button" onClick={() => onSection("prospects")}>Открыть базу <ArrowRight size={14}/></button></div>
+    {savedCompanies.length ? <div className="saved-grid">{savedCompanies.map(p => <button className="saved-card" key={p.id} onClick={() => onOpen(p.website)}><span className="saved-card-icon"><Globe2 size={20}/></span><b>{p.company}</b><span>{shortHost(p.website)}</span><ExternalLink size={15} className="saved-external"/></button>)}</div> : <div className="panel inline-empty"><Building2 size={17}/><span>Сохранённые сайты компаний появятся здесь после добавления адреса в карточку.</span></div>}
+  </div>;
+}
+
+function HistoryPage({ history, onOpen, onClear }: { history: HistoryItem[]; onOpen: (url: string) => void; onClear: () => void }) {
+  const formatDate = (value: string) => {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(date);
+  };
+  return <div className="standard-page"><PageHeader eyebrow="ВАШИ ПОСЕЩЕНИЯ" title="История браузера" description="Недавно открытые страницы хранятся локально на этом устройстве." action={<button className="button button-secondary" disabled={!history.length} onClick={onClear}><Trash2 size={15}/> Очистить историю</button>}/>
+    <div className="panel history-panel">{history.length ? history.map(item => <div className="history-item" key={item.id}><div className="history-favicon"><Globe2 size={16}/></div><button className="history-link" onClick={() => onOpen(item.url)}><b>{item.title || shortHost(item.url)}</b><span>{item.url}</span></button><time>{formatDate(item.visitedAt)}</time><button className="icon-button" title="Открыть сайт" onClick={() => onOpen(item.url)}><ArrowRight size={15}/></button></div>) : <div className="empty-state"><div className="empty-icon"><HistoryIcon size={23}/></div><h3>История пока пуста</h3><p>Открытые страницы будут появляться здесь автоматически.</p></div>}</div>
   </div>;
 }
 
