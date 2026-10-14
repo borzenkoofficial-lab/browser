@@ -135,7 +135,7 @@ ipcMain.handle("history:save", (_event, records: unknown) => replaceRecords("his
 ipcMain.handle("prospects:save", (_event, records: unknown) => replaceRecords("prospects", records));
 ipcMain.handle("storage:backup", async () => {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const result = await dialog.showSaveDialog(mainWindow ?? undefined, {
+  const result = await dialog.showSaveDialog({
     title: "Создать резервную копию NEXUS",
     defaultPath: path.join(app.getPath("userData"), "backups", `nexus-backup-${stamp}.sqlite`),
     filters: [{ name: "SQLite backup", extensions: ["sqlite"] }]
@@ -144,7 +144,7 @@ ipcMain.handle("storage:backup", async () => {
   return { cancelled: false, ...(await createBackup(result.filePath)) };
 });
 ipcMain.handle("storage:restore", async () => {
-  const result = await dialog.showOpenDialog(mainWindow ?? undefined, {
+  const result = await dialog.showOpenDialog({
     title: "Выберите резервную копию NEXUS",
     properties: ["openFile"],
     filters: [{ name: "SQLite backup", extensions: ["sqlite", "db"] }]
