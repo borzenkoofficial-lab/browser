@@ -327,7 +327,7 @@ function App() {
       <div className="content-region">
         {activeTab && section === "home" ? <div className="web-viewport" ref={viewportRef} /> : <div className="page-scroll">
           {section === "home" && <Dashboard prospects={prospects} onSearch={q => { setAddress(q); void openTab("https://www.google.com/search?q=" + encodeURIComponent(q)); }} onSection={goSection} onAdd={() => { resetForm(); setEditing(null); setShowAdd(true); }} onExport={exportCsv}/>}
-          {section === "research" && <Research onSearch={q => { setAddress(q); void openTab("https://www.google.com/search?q=" + encodeURIComponent(q)); }} onSave={() => { resetForm(); setForm(p => ({ ...p, source: "Поиск клиентов" })); setShowAdd(true); }}/>}
+          {section === "research" && <Research onSearch={(q, source = "Веб-поиск") => { const base = source === "Яндекс" ? "https://yandex.ru/search/?text=" : source === "Bing" ? "https://www.bing.com/search?q=" : "https://www.google.com/search?q="; setAddress(base + encodeURIComponent(q)); void openTab(base + encodeURIComponent(q)); }} onSave={() => { resetForm(); setForm(p => ({ ...p, source: "Поиск клиентов" })); setShowAdd(true); }}/>}
           {section === "prospects" && <ProspectsPage prospects={filtered} query={prospectQuery} setQuery={setProspectQuery} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onAdd={() => { resetForm(); setEditing(null); setShowAdd(true); }} onEdit={editProspect} onDelete={id => { if (confirm("Удалить компанию из локальной базы?")) void persistProspects(prospects.filter(p => p.id !== id)); }} onExport={exportCsv} onOpen={url => void openTab(url)} onImport={importCsv}/>}
           {section === "saved" && <SavedPage bookmarks={bookmarks} prospects={prospects} onOpen={url => void openTab(url)} onSection={goSection} onRemoveBookmark={id => void removeBookmark(id)}/>}
           {section === "history" && <HistoryPage history={history} onOpen={url => void openTab(url)} onClear={clearHistory}/>}
@@ -397,14 +397,14 @@ function Metric({ icon, label, value, detail, tone }: { icon: React.ReactNode; l
   return <div className="metric-card"><div className={`metric-icon ${tone}`}>{icon}<span className="metric-spark"/></div><span className="metric-label">{label}</span><strong>{value}</strong><small>{detail}</small></div>;
 }
 
-function Research({ onSearch, onSave }: { onSearch: (q: string) => void; onSave: () => void }) {
+function Research({ onSearch, onSave }: { onSearch: (q: string, source?: string) => void; onSave: () => void }) {
   const [sector, setSector] = useState("Строительство и подрядчики");
   const [region, setRegion] = useState("Москва и Московская область");
   const [keywords, setKeywords] = useState("");
   const [source, setSource] = useState("Веб-поиск");
   const run = () => {
     const q = [sector, region, keywords].filter(Boolean).join(" ");
-    onSearch(q);
+    onSearch(q, source);
   };
   return <div className="standard-page"><PageHeader eyebrow="ИССЛЕДОВАНИЕ РЫНКА" title="Поиск клиентов" description="Формируйте запросы к открытым веб-источникам и сохраняйте проверенные компании." action={<span className="local-pill"><ShieldCheck size={14}/> Без сервера</span>}/>
     <div className="research-layout"><section className="panel research-form-panel"><div className="panel-heading"><div><h3>Параметры поиска</h3><p>Уточните профиль потенциального клиента</p></div><div className="panel-heading-icon"><ListFilter size={18}/></div></div>
