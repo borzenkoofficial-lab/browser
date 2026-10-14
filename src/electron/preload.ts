@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld("nexus", {
   saveBookmarks: (records: unknown[]) => ipcRenderer.invoke("bookmarks:save", records),
   listHistory: () => ipcRenderer.invoke("history:list"),
   saveHistory: (records: unknown[]) => ipcRenderer.invoke("history:save", records),
+  createBackup: () => ipcRenderer.invoke("storage:backup") as Promise<{ cancelled: boolean; path?: string; integrity?: string }>,
+  restoreBackup: () => ipcRenderer.invoke("storage:restore") as Promise<{ cancelled: boolean; restored?: boolean; safetyBackupPath?: string }>,
   getVersion: () => ipcRenderer.invoke("app:version"),
   onTitle: (callback: (data: { id: string; title: string }) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: { id: string; title: string }) => callback(data);
