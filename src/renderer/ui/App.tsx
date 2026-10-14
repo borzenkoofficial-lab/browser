@@ -20,6 +20,7 @@ type Section = "home" | "prospects" | "research" | "saved" | "history" | "settin
 
 const starterProspects: Prospect[] = [];
 const makeId = () => crypto.randomUUID();
+const localDateKey = (date = new Date()) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 const shortHost = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url || "Новая вкладка"; } };
 
 function App() {
@@ -291,13 +292,13 @@ function App() {
   const filtered = useMemo(() => prospects.filter(p => {
     const q = prospectQuery.toLowerCase().trim();
     const matches = !q || [p.company, p.website, p.contact, p.email, p.phone, p.location, p.nextAction, p.industry, p.notes].some(v => (v || "").toLowerCase().includes(q));
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateKey();
     const dateMatches = statusFilter === "Просрочен контакт"
       ? Boolean(p.followUpDate && p.followUpDate < today && p.status !== "Не подходит")
       : statusFilter === "Контакт сегодня"
         ? p.followUpDate === today && p.status !== "Не подходит"
         : statusFilter === "Контакт в ближайшие 7 дней"
-          ? Boolean(p.followUpDate && p.followUpDate >= today && p.followUpDate <= new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10) && p.status !== "Не подходит")
+          ? Boolean(p.followUpDate && p.followUpDate >= today && p.followUpDate <= localDateKey(new Date(Date.now() + 7 * 86400000)) && p.status !== "Не подходит")
           : statusFilter === "Все статусы" || p.status === statusFilter;
     return matches && dateMatches;
   }), [prospects, prospectQuery, statusFilter]);
