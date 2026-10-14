@@ -297,7 +297,6 @@ export async function restoreBackup(sourcePath: string): Promise<{ restored: boo
 
   const safetyBackupPath = path.join(path.dirname(activePath), "backups", `before-restore-${new Date().toISOString().replace(/[:.]/g, "-")}.sqlite`);
   await createBackup(safetyBackupPath);
-  const previousSnapshot = connection.export();
   const previousDb = connection;
   try {
     connection = restoredDb;
@@ -305,7 +304,7 @@ export async function restoreBackup(sourcePath: string): Promise<{ restored: boo
     previousDb.close();
   } catch (error) {
     restoredDb.close();
-    connection = new SQL.Database(previousSnapshot);
+    connection = previousDb;
     throw error;
   }
   return { restored: true, safetyBackupPath };
