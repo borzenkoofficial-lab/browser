@@ -22,6 +22,8 @@ contextBridge.exposeInMainWorld("nexus", {
   saveDocuments: (records: unknown[]) => ipcRenderer.invoke("documents:save", records),
   listObjects: () => ipcRenderer.invoke("objects:list"),
   saveObjects: (records: unknown[]) => ipcRenderer.invoke("objects:save", records),
+  listFinance: () => ipcRenderer.invoke("finance:list"),
+  saveFinance: (records: unknown[]) => ipcRenderer.invoke("finance:save", records),
   createBackup: () => ipcRenderer.invoke("storage:backup") as Promise<{ cancelled: boolean; path?: string; integrity?: string }>,
   restoreBackup: () => ipcRenderer.invoke("storage:restore") as Promise<{ cancelled: boolean; restored?: boolean; safetyBackupPath?: string }>,
   getVersion: () => ipcRenderer.invoke("app:version"),
