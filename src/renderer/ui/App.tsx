@@ -174,28 +174,56 @@ function App() {
     }
   };
 
-  const persistEstimates = async (next: Estimate[]) => {
+  const persistEstimates = async (next: Estimate[]): Promise<boolean> => {
+    const previous = estimates;
     setEstimates(next);
-    try { await window.nexus.saveEstimates(next); }
-    catch { notify("Не удалось сохранить сметы"); }
+    try {
+      await window.nexus.saveEstimates(next);
+      return true;
+    } catch {
+      setEstimates(previous);
+      notify("Не удалось сохранить сметы. Изменения отменены.");
+      return false;
+    }
   };
 
-  const persistDocuments = async (next: BusinessDocument[]) => {
+  const persistDocuments = async (next: BusinessDocument[]): Promise<boolean> => {
+    const previous = documents;
     setDocuments(next);
-    try { await window.nexus.saveDocuments(next); }
-    catch { notify("Не удалось сохранить документы"); }
+    try {
+      await window.nexus.saveDocuments(next);
+      return true;
+    } catch {
+      setDocuments(previous);
+      notify("Не удалось сохранить документы. Изменения отменены.");
+      return false;
+    }
   };
 
-  const persistObjects = async (next: ProjectObject[]) => {
+  const persistObjects = async (next: ProjectObject[]): Promise<boolean> => {
+    const previous = objects;
     setObjects(next);
-    try { await window.nexus.saveObjects(next); }
-    catch { notify("Не удалось сохранить объекты"); }
+    try {
+      await window.nexus.saveObjects(next);
+      return true;
+    } catch {
+      setObjects(previous);
+      notify("Не удалось сохранить объекты. Изменения отменены.");
+      return false;
+    }
   };
 
-  const persistFinance = async (next: FinanceEntry[]) => {
+  const persistFinance = async (next: FinanceEntry[]): Promise<boolean> => {
+    const previous = finance;
     setFinance(next);
-    try { await window.nexus.saveFinance(next); }
-    catch { notify("Не удалось сохранить финансовые операции"); }
+    try {
+      await window.nexus.saveFinance(next);
+      return true;
+    } catch {
+      setFinance(previous);
+      notify("Не удалось сохранить финансовые операции. Изменения отменены.");
+      return false;
+    }
   };
 
   const persistSuppliers = async (next: Supplier[]) => {
@@ -467,10 +495,10 @@ function App() {
           {section === "saved" && <SavedPage bookmarks={bookmarks} prospects={prospects} onOpen={url => void openTab(url)} onSection={goSection} onRemoveBookmark={id => void removeBookmark(id)}/>}
           {section === "history" && <HistoryPage history={history} onOpen={url => void openTab(url)} onClear={clearHistory}/>}
           {section === "settings" && <SettingsPage version={version} storageBusy={storageBusy} onBackup={() => void createBackup()} onRestore={() => void restoreBackup()}/>}
-          {section === "estimates" && <EstimatesPage estimates={estimates} onSave={item => { const exists = estimates.some(e => e.id === item.id); void persistEstimates(exists ? estimates.map(e => e.id === item.id ? item : e) : [item, ...estimates]); notify("Смета сохранена локально"); }} onDelete={id => { if (confirm("Удалить эту смету?")) void persistEstimates(estimates.filter(item => item.id !== id)); }}/>}
-          {section === "documents" && <DocumentsPage estimates={estimates} documents={documents} onSave={item => { const exists = documents.some(d => d.id === item.id); void persistDocuments(exists ? documents.map(d => d.id === item.id ? item : d) : [item, ...documents]); notify("Документ сохранён локально"); }} onDelete={id => { if (confirm("Удалить документ?")) void persistDocuments(documents.filter(item => item.id !== id)); }}/>}
-          {section === "objects" && <ObjectsPage objects={objects} estimates={estimates} onSave={item => { const exists = objects.some(o => o.id === item.id); void persistObjects(exists ? objects.map(o => o.id === item.id ? item : o) : [item, ...objects]); notify("Объект сохранён локально"); }} onDelete={id => { if (confirm("Удалить объект вместе с его сменными отчётами?")) void persistObjects(objects.filter(item => item.id !== id)); }}/>}
-          {section === "finance" && <FinancePage entries={finance} objects={objects} onSave={item => { const exists = finance.some(entry => entry.id === item.id); void persistFinance(exists ? finance.map(entry => entry.id === item.id ? item : entry) : [item, ...finance]); notify("Финансовая операция сохранена"); }} onDelete={id => { if (confirm("Удалить финансовую операцию?")) void persistFinance(finance.filter(item => item.id !== id)); }}/>} 
+          {section === "estimates" && <EstimatesPage estimates={estimates} onSave={async item => { const exists = estimates.some(e => e.id === item.id); const saved = await persistEstimates(exists ? estimates.map(e => e.id === item.id ? item : e) : [item, ...estimates]); if (saved) notify("Смета сохранена"); }} onDelete={id => { if (confirm("Удалить эту смету?")) void persistEstimates(estimates.filter(item => item.id !== id)); }}/>}
+          {section === "documents" && <DocumentsPage estimates={estimates} documents={documents} onSave={async item => { const exists = documents.some(d => d.id === item.id); const saved = await persistDocuments(exists ? documents.map(d => d.id === item.id ? item : d) : [item, ...documents]); if (saved) notify("Документ сохранён"); }} onDelete={id => { if (confirm("Удалить документ?")) void persistDocuments(documents.filter(item => item.id !== id)); }}/>}
+          {section === "objects" && <ObjectsPage objects={objects} estimates={estimates} onSave={async item => { const exists = objects.some(o => o.id === item.id); const saved = await persistObjects(exists ? objects.map(o => o.id === item.id ? item : o) : [item, ...objects]); if (saved) notify("Объект сохранён"); }} onDelete={id => { if (confirm("Удалить объект вместе с его сменными отчётами?")) void persistObjects(objects.filter(item => item.id !== id)); }}/>}
+          {section === "finance" && <FinancePage entries={finance} objects={objects} onSave={async item => { const exists = finance.some(entry => entry.id === item.id); const saved = await persistFinance(exists ? finance.map(entry => entry.id === item.id ? item : entry) : [item, ...finance]); if (saved) notify("Финансовая операция сохранена"); }} onDelete={id => { if (confirm("Удалить финансовую операцию?")) void persistFinance(finance.filter(item => item.id !== id)); }}/>} 
           {section === "suppliers" && <SuppliersPage suppliers={suppliers} onSave={item => { const exists = suppliers.some(supplier => supplier.id === item.id); void persistSuppliers(exists ? suppliers.map(supplier => supplier.id === item.id ? item : supplier) : [item, ...suppliers]); }} onDelete={id => { if (confirm("Удалить карточку поставщика?")) void persistSuppliers(suppliers.filter(item => item.id !== id)); }}/>} 
         </div>}
       </div>
