@@ -33,8 +33,16 @@ export function validateProspect(value: unknown): JsonRecord {
   const id = requireString(item.id, "id", 200).trim();
   const company = requireString(item.company, "company", 500).trim();
   if (!id || !company) throw new Error("У компании должны быть id и название");
-  for (const field of ["website", "contact", "email", "phone", "location", "nextAction", "followUpDate", "industry", "status", "source", "notes", "createdAt"]) {
+  for (const field of ["website", "contact", "email", "phone", "location", "nextAction", "followUpDate", "industry", "status", "source", "sourceUrl", "sourceCapturedAt", "notes", "createdAt"]) {
     if (item[field] !== undefined) requireString(item[field], field);
+  }
+  if (typeof item.sourceCapturedAt === "string" && item.sourceCapturedAt && !isValidIsoDate(item.sourceCapturedAt)) {
+    throw new Error("Дата проверки источника должна быть реальной датой в формате ГГГГ-ММ-ДД");
+  }
+  if (typeof item.sourceUrl === "string" && item.sourceUrl.trim()) {
+    let parsedSourceUrl: URL;
+    try { parsedSourceUrl = new URL(item.sourceUrl); } catch { throw new Error("URL источника должен быть корректным HTTP(S)-адресом"); }
+    if (parsedSourceUrl.protocol !== "http:" && parsedSourceUrl.protocol !== "https:") throw new Error("URL источника должен использовать HTTP или HTTPS");
   }
   if (typeof item.followUpDate === "string" && item.followUpDate && !isValidIsoDate(item.followUpDate)) {
     throw new Error("Дата следующего контакта должна быть реальной датой в формате ГГГГ-ММ-ДД");

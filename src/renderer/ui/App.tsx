@@ -14,7 +14,7 @@ type ActivityEntry = { id: string; date: string; type: string; note: string };
 type Prospect = {
   id: string; company: string; website: string; contact: string; email: string;
   phone: string; location: string; nextAction: string; followUpDate: string; industry: string; status: "Новый" | "В работе" | "Приоритет" | "Не подходит";
-  source: string; notes: string; createdAt: string; tags?: string[]; activity?: ActivityEntry[];
+  source: string; sourceUrl?: string; sourceCapturedAt?: string; notes: string; createdAt: string; tags?: string[]; activity?: ActivityEntry[];
 };
 type Tab = { id: string; title: string; url: string };
 type BookmarkItem = { id: string; title: string; url: string; createdAt: string };
@@ -56,7 +56,7 @@ function App() {
   const [sidebarCompact, setSidebarCompact] = useState(false);
   const [storageBusy, setStorageBusy] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
-  const [form, setForm] = useState({ company: "", website: "", contact: "", email: "", phone: "", location: "Москва и Московская область", nextAction: "", followUpDate: "", industry: "Строительство", status: "Новый" as Prospect["status"], source: "Сайт компании", notes: "", tags: "", activityType: "Звонок", activityNote: "" });
+  const [form, setForm] = useState({ company: "", website: "", contact: "", email: "", phone: "", location: "Москва и Московская область", nextAction: "", followUpDate: "", industry: "Строительство", status: "Новый" as Prospect["status"], source: "Сайт компании", sourceUrl: "", sourceCapturedAt: "", notes: "", tags: "", activityType: "Звонок", activityNote: "" });
   const viewportRef = useRef<HTMLDivElement>(null);
   const activeTabRef = useRef<string | null>(activeTab);
   const historyRef = useRef<HistoryItem[]>(history);
@@ -404,6 +404,8 @@ function App() {
         industry: existing.industry || "Строительство",
         status: existing.status || "Новый",
         source: existing.source || "Открытая вкладка",
+        sourceUrl: existing.sourceUrl || current.url,
+        sourceCapturedAt: existing.sourceCapturedAt || localDateKey(),
         notes: candidateNote && existing.notes?.includes(candidateNote) ? existing.notes : [existing.notes, candidateNote].filter(Boolean).join("\n\n") || description,
         tags: (existing.tags ?? []).join(", "),
         activityType: "Звонок",
@@ -426,6 +428,8 @@ function App() {
         industry: "Строительство",
         status: "Новый",
         source: "Открытая вкладка",
+        sourceUrl: current.url,
+        sourceCapturedAt: localDateKey(),
         notes: pageNotes,
         tags: "",
         activityType: "Звонок",
@@ -477,7 +481,7 @@ function App() {
     await historySaveQueueRef.current;
   };
 
-  const resetForm = () => setForm({ company: "", website: "", contact: "", email: "", phone: "", location: "Москва и Московская область", nextAction: "", followUpDate: "", industry: "Строительство", status: "Новый", source: "Сайт компании", notes: "", tags: "", activityType: "Звонок", activityNote: "" });
+  const resetForm = () => setForm({ company: "", website: "", contact: "", email: "", phone: "", location: "Москва и Московская область", nextAction: "", followUpDate: "", industry: "Строительство", status: "Новый", source: "Сайт компании", sourceUrl: "", sourceCapturedAt: "", notes: "", tags: "", activityType: "Звонок", activityNote: "" });
 
   const saveForm = async () => {
     if (!form.company.trim()) { notify("Укажите название компании"); return; }
@@ -501,14 +505,14 @@ function App() {
 
   const editProspect = (item: Prospect) => {
     setEditing(item);
-    setForm({ company: item.company, website: item.website, contact: item.contact, email: item.email, phone: item.phone, location: item.location || "", nextAction: item.nextAction || "", followUpDate: item.followUpDate || "", industry: item.industry, status: item.status, source: item.source, notes: item.notes, tags: (item.tags ?? []).join(", "), activityType: "Звонок", activityNote: "" });
+    setForm({ company: item.company, website: item.website, contact: item.contact, email: item.email, phone: item.phone, location: item.location || "", nextAction: item.nextAction || "", followUpDate: item.followUpDate || "", industry: item.industry, status: item.status, source: item.source, sourceUrl: item.sourceUrl || "", sourceCapturedAt: item.sourceCapturedAt || "", notes: item.notes, tags: (item.tags ?? []).join(", "), activityType: "Звонок", activityNote: "" });
     setShowAdd(true);
   };
 
   const exportCsv = (records: Prospect[] = filtered) => {
-    const headers = ["Компания", "Сайт", "Контакт", "Email", "Телефон", "Регион", "Следующий шаг", "Дата контакта", "Отрасль", "Статус", "Источник", "Заметки", "Метки", "Дата добавления"];
+    const headers = ["Компания", "Сайт", "Контакт", "Email", "Телефон", "Регион", "Следующий шаг", "Дата контакта", "Отрасль", "Статус", "Источник", "URL источника", "Дата проверки источника", "Заметки", "Метки", "Дата добавления"];
     const quote = (v: unknown) => '"' + String(v ?? "").replace(/"/g, '""') + '"';
-    const lines = [headers, ...records.map(p => [p.company, p.website, p.contact, p.email, p.phone, p.location, p.nextAction, p.followUpDate, p.industry, p.status, p.source, p.notes, (p.tags ?? []).join(", "), p.createdAt])].map(row => row.map(quote).join(";"));
+    const lines = [headers, ...records.map(p => [p.company, p.website, p.contact, p.email, p.phone, p.location, p.nextAction, p.followUpDate, p.industry, p.status, p.source, p.sourceUrl ?? "", p.sourceCapturedAt ?? "", p.notes, (p.tags ?? []).join(", "), p.createdAt])].map(row => row.map(quote).join(";"));
     const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = "nexus-prospects.csv"; a.click(); URL.revokeObjectURL(url);
@@ -661,6 +665,8 @@ function App() {
           <label className="field"><span>Статус</span><select value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value as Prospect["status"] }))}><option>Новый</option><option>В работе</option><option>Приоритет</option><option>Не подходит</option></select></label>
           <label className="field full"><span>Метки</span><input value={form.tags} onChange={e => setForm(p => ({ ...p, tags: e.target.value }))} placeholder="Например: генподрядчик, крупный объект, тендер (через запятую)"/></label>
           <label className="field full"><span>Источник информации</span><input value={form.source} onChange={e => setForm(p => ({ ...p, source: e.target.value }))} placeholder="Сайт, каталог, рекомендация…"/></label>
+          <label className="field full"><span>URL источника</span><input type="url" value={form.sourceUrl} onChange={e => setForm(p => ({ ...p, sourceUrl: e.target.value }))} placeholder="https://example.ru/page"/></label>
+          <label className="field"><span>Дата проверки источника</span><input type="date" value={form.sourceCapturedAt} onChange={e => setForm(p => ({ ...p, sourceCapturedAt: e.target.value }))}/></label>
           <label className="field full"><span>Заметки о компании</span><textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={3} placeholder="Чем занимается компания, потенциальная потребность…"/></label>
           <div className="activity-editor full">
             <div className="activity-editor-heading"><b>История взаимодействия</b><span>{editing?.activity?.length ?? 0} записей</span></div>

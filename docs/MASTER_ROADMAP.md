@@ -102,6 +102,7 @@ These supplement the 40-tool baseline and do not replace it.
 - Recent business searches: keep the last five searches with intent/source/query and allow repeat/clear.
 - Prospect deduplication by website: normalize host, ignore protocol, www and path; open existing record instead of creating a duplicate.
 - Contact candidate extraction: extract unique email/phone candidates from the open page, keep additional candidates in notes, label as unverified. Not proof that contact details are current.
+- Lead source provenance (added with this audit batch): store the source URL and source-check date on the company record; capture them when saving an open site; preserve them through CSV import/export; validate HTTP(S) URLs and real ISO dates.
 - Proposed major UX/function expansions to fold into the matching baseline modules: a dedicated client acquisition workspace; sales pipeline/next-action dashboard; company intelligence timeline; AI-assisted page summaries and outreach drafts; richer project/tab workspaces; source freshness and data-quality indicators. These are roadmap additions, not claims that they are implemented.
 
 ## Engineering and data integrity rules
@@ -145,7 +146,7 @@ These supplement the 40-tool baseline and do not replace it.
 | 2 | Lead qualification | **Partial** | `App.tsx`: company form includes status, priority-related dashboard ordering, industry, tags, notes, next action and follow-up date. No full sales pipeline stages, assignment or structured qualification score. |
 | 3 | Tender search | **Partial** | Tender/procurement is a search intent preset. No tender register with amount, deadline, requirements, source verification and reminder workflow. |
 | 4 | Contact center | **Partial** | Contact fields, extracted email/phone candidates, activity note and follow-up date exist. No call/email history timeline or integrated message sending/templates workflow. |
-| 5 | Company dossier | **Partial** | Prospect record, website extraction and unverified contact candidates exist. No structured projects/public-details/source history or source freshness tracking. |
+| 5 | Company dossier | **Partial** | Prospect record, website extraction, unverified contact candidates, source URL and source-check date exist. Structured projects/public details and a richer source history/freshness timeline remain missing. |
 | 6 | Construction calculator | **Partial** | `EstimatesPage` supports line items, units, quantity, price and cost. No maintained work-rate catalogue or complexity-factor library is evident. |
 | 7 | Cost and margin | **Partial** | Estimate lines store price and cost and calculate economics. Separate structured labor/material/equipment/transport/waste/overhead breakdown and explicit tax/VAT settings are not present as a complete model. |
 | 8 | Estimates and commercial proposals | **Partial** | `EstimatesPage` and `DocumentsPage` support saved estimates, proposal fields, templates/styles and print flow. Version history and an immutable issued-document snapshot are not evident; only three styles are represented in the current type. |
@@ -200,6 +201,10 @@ These supplement the 40-tool baseline and do not replace it.
 5. **Then finance, supply/risk and AI:** obligations/debt aging/scenarios; equipment/waste/inventory; sourced checks and contract analysis; AI only after provider security, consent and external-action confirmation are designed.
 
 ## Current implementation status (confirmed from repository history)
+
+| Feature | Status |
+|---|---|
+| Lead source provenance | Implemented in current feature branch; pending CI/merge. Includes form fields, capture from open page, CSV import/export, and URL/date validation. |
 
 | Feature | Status |
 |---|---|

@@ -1,7 +1,7 @@
 export type CsvProspectRow = {
   company: string; website: string; contact: string; email: string; phone: string; location: string; nextAction: string; followUpDate: string;
   industry: string; status: "Новый" | "В работе" | "Приоритет" | "Не подходит";
-  source: string; notes: string; tags: string[]; createdAt: string;
+  source: string; sourceUrl: string; sourceCapturedAt: string; notes: string; tags: string[]; createdAt: string;
 };
 
 function parseRecords(text: string, delimiter: string): string[][] {
@@ -79,6 +79,8 @@ export function parseProspectsCsv(text: string): CsvProspectRow[] {
     industry: index("отрасль", "industry", "сфера"),
     status: index("статус", "status"),
     source: index("источник", "source"),
+    sourceUrl: index("urlисточника", "ссылкаисточника", "sourceurl"),
+    sourceCapturedAt: index("датапроверкиисточника", "датасбораисточника", "sourcecapturedat", "sourceverifiedat"),
     notes: index("заметки", "notes", "комментарий"),
     tags: index("метки", "теги", "tags", "labels"),
     createdAt: index("дата", "добавлено", "createdat", "датадобавления")
@@ -94,7 +96,7 @@ export function parseProspectsCsv(text: string): CsvProspectRow[] {
     const followUpDate = normalizeFollowUpDate(get("followUpDate"), rowIndex + 2);
     return {
       company: get("company"), website: get("website"), contact: get("contact"), email: get("email"),
-      phone: get("phone"), location: get("location"), nextAction: get("nextAction"), followUpDate, industry: get("industry"), status, source: get("source"), notes: get("notes"),
+      phone: get("phone"), location: get("location"), nextAction: get("nextAction"), followUpDate, industry: get("industry"), status, source: get("source"), sourceUrl: get("sourceUrl"), sourceCapturedAt: get("sourceCapturedAt"), notes: get("notes"),
       tags: get("tags").split(/[;,]/).map(tag => tag.trim()).filter(Boolean).slice(0, 20),
       createdAt: get("createdAt") || new Date().toISOString()
     };
