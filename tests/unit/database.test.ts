@@ -133,6 +133,32 @@ describe("SQLite repository storage", () => {
     expect(listRecords("documents")).toEqual([]);
   });
 
+  it("stores project objects with shift reports and restores them from backup", async () => {
+    await setup();
+    const project = {
+      id: "o1", name: "Демонтаж офиса", customer: "ООО Заказчик", address: "Москва",
+      status: "В работе", startDate: "2026-10-14", endDate: "2026-10-30", estimateId: "e1",
+      plannedRevenue: 250000, notes: "Ручной вынос", createdAt: "2026-10-14T10:00:00.000Z",
+      updatedAt: "2026-10-14T10:00:00.000Z",
+      shifts: [{ id: "s1", date: "2026-10-14", workers: 4, hours: 8, quantity: 42, revenue: 25000, cost: 16000, notes: "Без лифта" }]
+    };
+    replaceRecords("objects", [project]);
+    expect(listRecords("objects")).toEqual([project]);
+    const backupPath = path.join(tempDir, "backups", "objects.sqlite");
+    expect((await createBackup(backupPath)).integrity).toBe("ok");
+    replaceRecords("objects", []);
+    await restoreBackup(backupPath);
+    expect(listRecords("objects")).toEqual([project]);
+  });
+
+  it("rejects object shift reports with impossible work hours", async () => {
+    await setup();
+    expect(() => replaceRecords("objects", [{
+      id: "o2", name: "Объект", shifts: [{ id: "s1", date: "2026-10-14", workers: 2, hours: 900, quantity: 1, revenue: 1, cost: 1, notes: "" }]
+    }])).toThrow(/продолжительности/);
+    expect(listRecords("objects")).toEqual([]);
+  });
+
   it("creates and restores a verified backup", async () => {
     await setup();
     replaceRecords("prospects", [{ id: "p1", company: "Исходная компания" }]);
