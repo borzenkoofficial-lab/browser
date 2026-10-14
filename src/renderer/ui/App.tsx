@@ -161,10 +161,17 @@ function App() {
     }
   };
 
-  const persistProspects = async (next: Prospect[]) => {
+  const persistProspects = async (next: Prospect[]): Promise<boolean> => {
+    const previous = prospects;
     setProspects(next);
-    try { await window.nexus.saveProspects(next); }
-    catch { notify("Не удалось сохранить базу"); }
+    try {
+      await window.nexus.saveProspects(next);
+      return true;
+    } catch {
+      setProspects(previous);
+      notify("Не удалось сохранить базу. Изменения отменены.");
+      return false;
+    }
   };
 
   const persistEstimates = async (next: Estimate[]) => {
@@ -318,7 +325,8 @@ function App() {
       createdAt: editing?.createdAt ?? new Date().toISOString()
     };
     const next = editing ? prospects.map(p => p.id === editing.id ? item : p) : [item, ...prospects];
-    await persistProspects(next);
+    const saved = await persistProspects(next);
+    if (!saved) return;
     setShowAdd(false); setEditing(null); resetForm();
     notify(editing ? "Карточка обновлена" : "Компания добавлена в базу");
   };
