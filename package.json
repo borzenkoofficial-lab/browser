@@ -5,10 +5,10 @@
   "description": "Business browser and prospect research workspace for Windows",
   "main": "dist-electron/main.js",
   "scripts": {
-    "dev": "electron-builder install-app-deps && concurrently -k \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "build": "tsc --noEmit && vite build && tsc -p tsconfig.electron.json",
     "start": "electron .",
-    "test": "npm rebuild better-sqlite3 --silent && vitest run",
+    "test": "vitest run",
     "test:watch": "vitest",
     "dist:win": "npm run build && electron-builder --win nsis --publish never"
   },
@@ -16,7 +16,7 @@
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "better-sqlite3": "^12.4.1"
+    "sql.js": "^1.13.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
@@ -30,7 +30,7 @@
     "vite": "^6.0.5",
     "vitest": "^2.1.8",
     "wait-on": "^8.0.1",
-    "@types/better-sqlite3": "^7.6.13"
+    "@types/sql.js": "^1.4.9"
   },
   "build": {
     "appId": "dev.nexus.businessbrowser",
