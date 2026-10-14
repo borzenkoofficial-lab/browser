@@ -19,6 +19,7 @@ The current codebase is an early MVP foundation. It combines a Chromium-powered 
 - Commercial proposal builder with three print templates, estimate-to-proposal flow, document status, validity date, terms, signature/stamp areas, and print-to-PDF through the system print dialog; documents are stored locally and included in backups
 - Production object tracking with estimate linkage, planned budget, daily shift reports, worker-hours, output, revenue, direct costs, productivity and actual gross-profit summaries
 - Local finance register for planned and paid income/expenses, categories, object linkage, period filtering, cashflow totals, receivables and planned expenses
+- Supplier directory with contact details, payment terms, delivery lead time, internal rating and active/paused status
 - Explicit user-triggered extraction of page title, meta description, visible text, email and phone candidates to prefill a company card
 - Search workflow for construction, contractors, property managers and other B2B categories
 - Search provider selection for Google, Bing and Yandex
