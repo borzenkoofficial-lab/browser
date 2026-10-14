@@ -23,3 +23,25 @@ jobs:
         run: npm test
       - name: Build application
         run: npm run build
+
+  windows-installer:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm install
+      - name: Run unit tests
+        run: npm test
+      - name: Build Windows installer
+        run: npm run dist:win
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NEXUS-Business-Browser-Windows
+          path: release/*.exe
+          if-no-files-found: error
