@@ -4,7 +4,7 @@ import { extractContactCandidates, formatContactCandidatesNote } from "../../src
 describe("extractContactCandidates", () => {
   it("collects distinct emails and plausible phone numbers", () => {
     const result = extractContactCandidates("Связь: sales@example.ru, SALES@example.ru; +7 (495) 123-45-67; 8 495 123 45 67; 12345");
-    expect(result.emails).toEqual(["sales@example.ru", "SALES@example.ru"]);
+    expect(result.emails).toEqual(["sales@example.ru"]);
     expect(result.phones).toEqual(["+7 (495) 123-45-67", "8 495 123 45 67"]);
   });
 
