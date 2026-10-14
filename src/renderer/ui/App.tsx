@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Activity, ArrowDownToLine, ArrowLeft, ArrowRight, Bell, Bookmark, BriefcaseBusiness,
+  Activity, ArrowDownToLine, ArrowLeft, ArrowRight, Bell, Bookmark,
   Building2, Check, ChevronDown, CircleHelp, Command, Compass, Download, ExternalLink,
-  FileSpreadsheet, Filter, Globe2, LayoutDashboard, ListFilter, LoaderCircle, Menu,
+  FileSpreadsheet, Filter, Globe2, LayoutDashboard, ListFilter, Menu,
   MoreHorizontal, Plus, Search, Settings2, ShieldCheck, Sparkles, Star, Target,
   Trash2, Users, WandSparkles, X, Zap
 } from "lucide-react";
@@ -253,10 +253,10 @@ function App() {
       </div>
 
       <div className="content-region">
-        {activeTab ? <div className="web-viewport" ref={viewportRef} /> : <div className="page-scroll">
+        {activeTab && section === "home" ? <div className="web-viewport" ref={viewportRef} /> : <div className="page-scroll">
           {section === "home" && <Dashboard prospects={prospects} onSearch={q => { setAddress(q); void openTab("https://www.google.com/search?q=" + encodeURIComponent(q)); }} onSection={goSection} onAdd={() => { resetForm(); setEditing(null); setShowAdd(true); }} onExport={exportCsv}/>}
           {section === "research" && <Research onSearch={q => { setAddress(q); void openTab("https://www.google.com/search?q=" + encodeURIComponent(q)); }} onSave={() => { resetForm(); setForm(p => ({ ...p, source: "Поиск клиентов" })); setShowAdd(true); }}/>}
-          {section === "prospects" && <ProspectsPage prospects={filtered} query={prospectQuery} setQuery={setProspectQuery} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onAdd={() => { resetForm(); setEditing(null); setShowAdd(true); }} onEdit={editProspect} onDelete={id => { if (confirm("Удалить компанию из локальной базы?")) void persistProspects(prospects.filter(p => p.id !== id)); }} onExport={exportCsv}/>}
+          {section === "prospects" && <ProspectsPage prospects={filtered} query={prospectQuery} setQuery={setProspectQuery} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onAdd={() => { resetForm(); setEditing(null); setShowAdd(true); }} onEdit={editProspect} onDelete={id => { if (confirm("Удалить компанию из локальной базы?")) void persistProspects(prospects.filter(p => p.id !== id)); }} onExport={exportCsv} onOpen={url => void openTab(url)}/>}
           {section === "saved" && <SavedPage prospects={prospects} onOpen={url => void openTab(url)} onSection={goSection}/>}
           {section === "settings" && <SettingsPage version={version}/>}
         </div>}
@@ -346,11 +346,11 @@ function Research({ onSearch, onSave }: { onSearch: (q: string) => void; onSave:
   </div>;
 }
 
-function ProspectsPage({ prospects, query, setQuery, statusFilter, setStatusFilter, onAdd, onEdit, onDelete, onExport }: { prospects: Prospect[]; query: string; setQuery: (v: string) => void; statusFilter: string; setStatusFilter: (v: string) => void; onAdd: () => void; onEdit: (p: Prospect) => void; onDelete: (id: string) => void; onExport: () => void }) {
+function ProspectsPage({ prospects, query, setQuery, statusFilter, setStatusFilter, onAdd, onEdit, onDelete, onExport, onOpen }: { prospects: Prospect[]; query: string; setQuery: (v: string) => void; statusFilter: string; setStatusFilter: (v: string) => void; onAdd: () => void; onEdit: (p: Prospect) => void; onDelete: (id: string) => void; onExport: () => void; onOpen: (url: string) => void }) {
   return <div className="standard-page"><PageHeader eyebrow="УПРАВЛЕНИЕ ПРОДАЖАМИ" title="База компаний" description="Единый список потенциальных клиентов, контактов и источников." action={<button className="button button-primary" onClick={onAdd}><Plus size={16}/> Добавить компанию</button>}/>
     <div className="table-toolbar"><div className="table-search"><Search size={16}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Поиск по компании, сайту, контакту…"/></div><div className="table-filters"><Filter size={15}/><select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option>Все статусы</option><option>Новый</option><option>В работе</option><option>Приоритет</option><option>Не подходит</option></select><button className="button button-secondary" onClick={onExport}><Download size={15}/> Экспорт CSV</button></div></div>
     <div className="panel table-panel"><div className="table-count"><span>Компании <b>{prospects.length}</b></span><span>Локальная база <span className="status-light"/></span></div>
-      {prospects.length === 0 ? <div className="empty-state"><div className="empty-icon"><Users size={24}/></div><h3>Пока нет компаний</h3><p>Добавьте первую компанию вручную или сохраните её с открытого сайта. Записи будут доступны после перезапуска.</p><button className="button button-primary" onClick={onAdd}><Plus size={16}/> Добавить первую компанию</button></div> : <div className="table-scroll"><table><thead><tr><th>Компания</th><th>Отрасль</th><th>Контактные данные</th><th>Источник</th><th>Статус</th><th></th></tr></thead><tbody>{prospects.map(p => <tr key={p.id}><td><div className="table-company"><div className="company-monogram">{p.company.slice(0,1).toUpperCase()}</div><div><b>{p.company}</b>{p.website && <a href="#" onClick={e => { e.preventDefault(); window.nexus.navigate("unused", p.website); }}>{shortHost(p.website)}</a>}</div></div></td><td>{p.industry || "—"}</td><td><div className="contact-cell">{p.contact && <span>{p.contact}</span>}{p.email && <span>{p.email}</span>}{p.phone && <span>{p.phone}</span>}{!p.contact && !p.email && !p.phone && "—"}</div></td><td>{p.source || "—"}</td><td><StatusBadge status={p.status}/></td><td><div className="row-actions"><button className="icon-button" title="Редактировать" onClick={() => onEdit(p)}><Settings2 size={15}/></button><button className="icon-button danger-hover" title="Удалить" onClick={() => onDelete(p.id)}><Trash2 size={15}/></button></div></td></tr>)}</tbody></table></div>}
+      {prospects.length === 0 ? <div className="empty-state"><div className="empty-icon"><Users size={24}/></div><h3>Пока нет компаний</h3><p>Добавьте первую компанию вручную или сохраните её с открытого сайта. Записи будут доступны после перезапуска.</p><button className="button button-primary" onClick={onAdd}><Plus size={16}/> Добавить первую компанию</button></div> : <div className="table-scroll"><table><thead><tr><th>Компания</th><th>Отрасль</th><th>Контактные данные</th><th>Источник</th><th>Статус</th><th></th></tr></thead><tbody>{prospects.map(p => <tr key={p.id}><td><div className="table-company"><div className="company-monogram">{p.company.slice(0,1).toUpperCase()}</div><div><b>{p.company}</b>{p.website && <a href="#" onClick={e => { e.preventDefault(); onOpen(p.website); }}>{shortHost(p.website)}</a>}</div></div></td><td>{p.industry || "—"}</td><td><div className="contact-cell">{p.contact && <span>{p.contact}</span>}{p.email && <span>{p.email}</span>}{p.phone && <span>{p.phone}</span>}{!p.contact && !p.email && !p.phone && "—"}</div></td><td>{p.source || "—"}</td><td><StatusBadge status={p.status}/></td><td><div className="row-actions"><button className="icon-button" title="Редактировать" onClick={() => onEdit(p)}><Settings2 size={15}/></button><button className="icon-button danger-hover" title="Удалить" onClick={() => onDelete(p.id)}><Trash2 size={15}/></button></div></td></tr>)}</tbody></table></div>}
     </div>
   </div>;
 }
