@@ -4,19 +4,20 @@ import fs from "node:fs/promises";
 import * as fsSync from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
-import { validateBookmark, validateHistoryItem, validateProspect, requireArray } from "./validation";
+import { validateBookmark, validateEstimate, validateHistoryItem, validateProspect, requireArray } from "./validation";
 
 export type StoredRecord = Record<string, unknown>;
-type DataKind = "prospects" | "bookmarks" | "history";
+type DataKind = "prospects" | "bookmarks" | "history" | "estimates";
+type LegacyDataKind = Exclude<DataKind, "estimates">;
 type SqlValue = string | number | null | Uint8Array;
 
-const MIGRATION_VERSION = 1;
+const MIGRATION_VERSION = 2;
 const requireFromProject = createRequire(path.join(process.cwd(), "package.json"));
 let connection: SqlDatabase | null = null;
 let sqlModule: SqlJsStatic | null = null;
 let activePath = "";
 
-const LEGACY_FILES: Record<DataKind, string> = {
+const LEGACY_FILES: Record<LegacyDataKind, string> = {
   prospects: "prospects.json",
   bookmarks: "bookmarks.json",
   history: "history.json"
@@ -80,7 +81,7 @@ function readLegacyRecords(filePath: string, kind: DataKind): StoredRecord[] {
     throw new Error(`Не удалось прочитать старые данные: ${path.basename(filePath)}. Исходный файл сохранён; миграция остановлена.`);
   }
   const records = requireArray(parsed, path.basename(filePath));
-  const validator = kind === "prospects" ? validateProspect : kind === "bookmarks" ? validateBookmark : validateHistoryItem;
+  const validator = kind === "prospects" ? validateProspect : kind === "bookmarks" ? validateBookmark : kind === "history" ? validateHistoryItem : validateEstimate;
   return records.map(validator);
 }
 
@@ -144,13 +145,20 @@ function createSchema(database: SqlDatabase): void {
     );
     CREATE INDEX IF NOT EXISTS idx_history_url ON history(url);
     CREATE INDEX IF NOT EXISTS idx_history_visited_at ON history(visited_at);
+    CREATE TABLE IF NOT EXISTS estimates (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT '',
+      payload_json TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_estimates_created_at ON estimates(created_at);
   `);
   run(database, "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)", [MIGRATION_VERSION, new Date().toISOString()]);
 }
 
 function saveRows(database: SqlDatabase, kind: DataKind, records: StoredRecord[]): void {
   if (records.length === 0) return;
-  const validator = kind === "prospects" ? validateProspect : kind === "bookmarks" ? validateBookmark : validateHistoryItem;
+  const validator = kind === "prospects" ? validateProspect : kind === "bookmarks" ? validateBookmark : kind === "history" ? validateHistoryItem : validateEstimate;
   const rows = records.map(record => {
     const item = validator(record);
     if (kind === "prospects") return {
@@ -163,14 +171,15 @@ function saveRows(database: SqlDatabase, kind: DataKind, records: StoredRecord[]
       id: item.id, title: item.title, url: item.url, created_at: item.createdAt ?? "",
       payload_json: JSON.stringify(item)
     };
-    return {
+    if (kind === "history") return {
       id: item.id, title: item.title, url: item.url, visited_at: item.visitedAt ?? "",
       payload_json: JSON.stringify(item)
     };
+    return { id: item.id, title: item.title, created_at: item.createdAt ?? "", payload_json: JSON.stringify(item) };
   });
   const columns = kind === "prospects"
     ? "id,company,website,contact,email,phone,industry,status,source,notes,created_at,payload_json"
-    : kind === "bookmarks" ? "id,title,url,created_at,payload_json" : "id,title,url,visited_at,payload_json";
+    : kind === "bookmarks" ? "id,title,url,created_at,payload_json" : kind === "history" ? "id,title,url,visited_at,payload_json" : "id,title,created_at,payload_json";
   const placeholders = Object.keys(rows[0]).map(() => "?").join(",");
   const statement = database.prepare(`INSERT INTO ${kind} (${columns}) VALUES (${placeholders})`);
   try {
@@ -197,7 +206,7 @@ function migrateLegacy(database: SqlDatabase, userDataPath: string): void {
       run(database, "COMMIT");
       return;
     }
-    for (const kind of Object.keys(LEGACY_FILES) as DataKind[]) {
+    for (const kind of Object.keys(LEGACY_FILES) as LegacyDataKind[]) {
       const filePath = path.join(userDataPath, LEGACY_FILES[kind]);
       if (fsSync.existsSync(filePath)) saveRows(database, kind, readLegacyRecords(filePath, kind));
     }
@@ -214,11 +223,14 @@ function validateBackupDatabase(database: SqlDatabase): void {
   const versionRows = queryRows(database, "SELECT MAX(version) AS version FROM schema_migrations");
   const version = Number(versionRows[0]?.version ?? 0);
   if (!version || version > MIGRATION_VERSION) throw new Error("Версия резервной копии несовместима с этой версией приложения");
-  for (const table of ["prospects", "bookmarks", "history"]) {
+  for (const table of ["prospects", "bookmarks", "history", "estimates"]) {
     const found = queryRows(database, "SELECT name FROM sqlite_master WHERE type='table' AND name=?", [table]);
-    if (!found.length) throw new Error("В резервной копии отсутствуют необходимые таблицы");
+    if (!found.length) {
+      if (table === "estimates") continue;
+      throw new Error("В резервной копии отсутствуют необходимые таблицы");
+    }
     const payloads = queryRows(database, `SELECT payload_json FROM ${table}`);
-    const validator = table === "prospects" ? validateProspect : table === "bookmarks" ? validateBookmark : validateHistoryItem;
+    const validator = table === "prospects" ? validateProspect : table === "bookmarks" ? validateBookmark : table === "history" ? validateHistoryItem : validateEstimate;
     for (const row of payloads) {
       let parsed: unknown;
       try { parsed = JSON.parse(String(row.payload_json)); }
@@ -305,7 +317,7 @@ export async function restoreBackup(sourcePath: string): Promise<{ restored: boo
   if (sameFilePath(sourcePath, activePath)) throw new Error("Нельзя восстановить базу из самого рабочего файла");
   const SQL = sqlModule;
   const restoredDb = new SQL.Database(new Uint8Array(await fs.readFile(sourcePath)));
-  try { validateBackupDatabase(restoredDb); }
+  try { validateBackupDatabase(restoredDb); createSchema(restoredDb); integrityCheck(restoredDb); }
   catch (error) { restoredDb.close(); throw error; }
 
   const safetyBackupPath = path.join(path.dirname(activePath), "backups", `before-restore-${new Date().toISOString().replace(/[:.]/g, "-")}.sqlite`);
