@@ -90,7 +90,7 @@ export function validateEstimate(value: unknown): JsonRecord {
 export function validateDocument(value: unknown): JsonRecord {
   const item = requireRecord(value, "Документ");
   const estimate = validateEstimate(item);
-  for (const field of ["number", "template", "supplier", "validUntil", "terms", "estimateId"]) {
+  for (const field of ["number", "template", "supplier", "date", "validUntil", "terms", "estimateId"]) {
     if (item[field] !== undefined) requireString(item[field], field, 5000);
   }
   if (item.template !== undefined && !["premium", "classic", "minimal"].includes(String(item.template))) {
