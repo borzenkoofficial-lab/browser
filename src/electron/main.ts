@@ -1,10 +1,11 @@
-import { app, BrowserWindow, WebContentsView, ipcMain, shell } from "electron";
+import { app, BrowserWindow, WebContentsView, ipcMain, shell, dialog } from "electron";
 import path from "node:path";
 import fs from "node:fs/promises";
 import { normalizeWebUrl } from "./url";
 
 const isDev = !app.isPackaged;
 let mainWindow: BrowserWindow | null = null;
+let downloadsConfigured = false;
 const browserViews = new Map<string, WebContentsView>();
 const viewBounds = new Map<string, { x: number; y: number; width: number; height: number }>();
 const dataFile = () => path.join(app.getPath("userData"), "prospects.json");
@@ -66,6 +67,17 @@ ipcMain.handle("browser:create", async (_event, id: string, initialUrl?: string)
     }
   });
   browserViews.set(id, view);
+  if (!downloadsConfigured) {
+    downloadsConfigured = true;
+    view.webContents.session.on("will-download", (_event, item, contents) => {
+      const owner = BrowserWindow.fromWebContents(contents) ?? mainWindow;
+      if (!owner) { item.cancel(); return; }
+      void dialog.showSaveDialog(owner, { defaultPath: item.getFilename() }).then(result => {
+        if (result.canceled || !result.filePath) item.cancel();
+        else item.setSavePath(result.filePath);
+      }).catch(() => item.cancel());
+    });
+  }
   mainWindow.contentView.addChildView(view);
   view.setBounds(viewBounds.get(id) ?? { x: 0, y: 150, width: 900, height: 600 });
   view.webContents.setWindowOpenHandler(({ url }) => {
