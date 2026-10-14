@@ -516,6 +516,35 @@ function Dashboard({ prospects, onSearch, onSection, onAdd, onExport, onFollowUp
         <button className="follow-up-stat upcoming-stat" onClick={() => openFollowUps("Контакт в ближайшие 7 дней")}><span>7 дней</span><b>{upcoming.length}</b><small>Скоро связаться</small></button>
       </div>{activeFollowUps.length ? <div className="follow-up-list">{activeFollowUps.slice(0, 5).map(p => <button className="follow-up-row" key={p.id} onClick={() => { onFollowUpFilter("Все статусы"); onSection("prospects"); }}><span className="company-monogram">{p.company.slice(0, 1).toUpperCase()}</span><span className="follow-up-company"><b>{p.company}</b><small>{p.nextAction || "Связаться с компанией"}</small></span><span className={p.followUpDate < todayKey ? "follow-up overdue" : p.followUpDate === todayKey ? "follow-up due-today" : "follow-up"}>{p.followUpDate}</span><ArrowRight size={14}/></button>)}</div> : <div className="follow-up-empty">Добавьте дату контакта в карточке компании — здесь появится список следующих действий.</div>}</section>;
     })()}
+    {(() => {
+      const priorityProspects = prospects
+        .filter(p => p.status === "Приоритет")
+        .sort((a, b) => {
+          const aDate = a.followUpDate || "9999-12-31";
+          const bDate = b.followUpDate || "9999-12-31";
+          return aDate.localeCompare(bDate) || a.company.localeCompare(b.company, "ru");
+        });
+      const todayKey = localDateKey();
+      return <section className="panel priority-queue-panel">
+        <div className="panel-heading">
+          <div><h3>Приоритетные клиенты</h3><p>Компании, которым стоит уделить внимание в первую очередь</p></div>
+          <span className="priority-queue-count">{priorityProspects.length}</span>
+        </div>
+        {priorityProspects.length ? <div className="priority-queue-list">
+          {priorityProspects.slice(0, 5).map(p => {
+            const overdue = Boolean(p.followUpDate && p.followUpDate < todayKey);
+            const dueToday = p.followUpDate === todayKey;
+            return <button className="priority-queue-row" key={p.id} onClick={() => { onFollowUpFilter("Приоритет"); onSection("prospects"); }}>
+              <span className="company-monogram priority-monogram">{p.company.slice(0, 1).toUpperCase()}</span>
+              <span className="priority-queue-company"><b>{p.company}</b><small>{[p.location, p.industry].filter(Boolean).join(" · ") || "Регион и отрасль не указаны"}</small><small>{p.nextAction || "Следующий шаг не запланирован"}</small></span>
+              <span className={overdue ? "priority-queue-date overdue" : dueToday ? "priority-queue-date due-today" : "priority-queue-date"}>{p.followUpDate || "Нет даты"}</span>
+              <ArrowRight size={14}/>
+            </button>;
+          })}
+          {priorityProspects.length > 5 && <button className="text-button priority-queue-more" onClick={() => { onFollowUpFilter("Приоритет"); onSection("prospects"); }}>Все приоритетные ({priorityProspects.length}) <ArrowRight size={15}/></button>}
+        </div> : <div className="priority-queue-empty">Отмечайте перспективные компании статусом «Приоритет» — они появятся здесь.</div>}
+      </section>;
+    })()}
     <div className="dashboard-bottom">
       <section className="panel quick-panel"><div className="panel-heading"><div><h3>Быстрые действия</h3><p>Основные инструменты под рукой</p></div><MoreHorizontal size={18}/></div>
         <button className="quick-action" onClick={() => onSection("research")}><span className="quick-icon violet"><Search size={17}/></span><span><b>Найти компании</b><small>Поиск через веб-источники</small></span><ArrowRight size={16}/></button>
