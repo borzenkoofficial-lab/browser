@@ -387,8 +387,8 @@ function App() {
         "СБОР ДАННЫХ СО СТРАНИЦЫ",
         `Страница: ${current.url}`,
         `Заголовок: ${pageTitle}`,
-        details.headings?.length ? `Разделы страницы:\\n- ${details.headings.join("\\n- ")}` : "",
-        details.formFields?.length ? `Видимые поля формы / заявки:\\n${details.formFields.map(field => `- ${field.label}: ${field.value}`).join("\\n")}` : "Видимые заполненные поля формы не найдены.",
+        details.headings?.length ? `Разделы страницы:\n- ${details.headings.join("\n- ")}` : "",
+        details.formFields?.length ? `Видимые поля формы / заявки:\n${details.formFields.map(field => `- ${field.label}: ${field.value}`).join("\n")}` : "Видимые заполненные поля формы не найдены.",
         details.tables?.length ? `Таблицы / данные страницы:\n${details.tables.map(table => table.slice(0, 2500)).join("\n\n---\n\n").slice(0, 8000)}` : "",
         details.links?.length ? `Ссылки на странице:\n${details.links.slice(0, 30).map(link => `- ${link.text}: ${link.url}`).join("\n")}` : "",
         details.text?.trim() ? `Текст страницы для проверки:\n${details.text.trim().slice(0, 14000)}` : ""
@@ -400,7 +400,7 @@ function App() {
 
     const { emails, phones } = extractContactCandidates(pageText);
     const candidateNote = formatContactCandidatesNote(emails, phones);
-    const pageNotes = [description, pageDataNote, candidateNote].filter(Boolean).join("\\n\\n");
+    const pageNotes = [description, pageDataNote, candidateNote].filter(Boolean).join("\n\n");
     const existing = findProspectByWebsite(prospects, current.url);
     if (existing) {
       setEditing(existing);
@@ -418,7 +418,7 @@ function App() {
         source: existing.source || "Открытая вкладка",
         sourceUrl: existing.sourceUrl || current.url,
         sourceCapturedAt: existing.sourceCapturedAt || localDateKey(),
-        notes: [existing.notes, pageDataNote && !existing.notes?.includes(`Страница: ${current.url}`) ? pageDataNote : "", candidateNote && !existing.notes?.includes(candidateNote) ? candidateNote : ""].filter(Boolean).join("\\n\\n") || description,
+        notes: [existing.notes, pageDataNote && !existing.notes?.includes(`Страница: ${current.url}`) ? pageDataNote : "", candidateNote && !existing.notes?.includes(candidateNote) ? candidateNote : ""].filter(Boolean).join("\n\n") || description,
         tags: (existing.tags ?? []).join(", "),
         activityType: "Звонок",
         activityNote: ""
