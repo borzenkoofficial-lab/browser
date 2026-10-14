@@ -122,12 +122,12 @@ function App() {
   };
 
   const restoreBackup = async () => {
-    if (!confirm("Восстановление заменит текущие компании, закладки и историю данными из выбранной копии. Перед заменой будет создана страховочная копия. Продолжить?")) return;
+    if (!confirm("Восстановление заменит текущие компании, закладки, историю и сметы данными из выбранной копии. Перед заменой будет создана страховочная копия. Продолжить?")) return;
     setStorageBusy(true);
     try {
       const result = await window.nexus.restoreBackup();
       if (result.cancelled) return;
-      const [nextProspects, nextBookmarks, nextHistory] = await Promise.all([
+      const [nextProspects, nextBookmarks, nextHistory, nextEstimates] = await Promise.all([
         window.nexus.listProspects(), window.nexus.listBookmarks(), window.nexus.listHistory(), window.nexus.listEstimates()
       ]);
       setProspects(nextProspects as Prospect[]);
