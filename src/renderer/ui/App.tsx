@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { parseProspectsCsv } from "../lib/csv";
 import {
   Activity, ArrowDownToLine, ArrowLeft, ArrowRight, Bell, Bookmark,
@@ -369,11 +369,11 @@ function App() {
   </div>;
 }
 
-function NavItem({ icon, label, active, count, compact, onClick }: { icon: React.ReactNode; label: string; active?: boolean; count?: number; compact: boolean; onClick: () => void }) {
+function NavItem({ icon, label, active, count, compact, onClick }: { icon: ReactNode; label: string; active?: boolean; count?: number; compact: boolean; onClick: () => void }) {
   return <button className={`nav-item ${active ? "active" : ""}`} onClick={onClick} title={compact ? label : undefined}>{icon}{!compact && <><span>{label}</span>{count !== undefined && <small>{count}</small>}</>}</button>;
 }
 
-function PageHeader({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: React.ReactNode }) {
+function PageHeader({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: ReactNode }) {
   return <div className="page-header"><div><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p>{description}</p></div>{action}</div>;
 }
 
@@ -404,7 +404,7 @@ function Dashboard({ prospects, onSearch, onSection, onAdd, onExport }: { prospe
   </div>;
 }
 
-function Metric({ icon, label, value, detail, tone }: { icon: React.ReactNode; label: string; value: string; detail: string; tone: string }) {
+function Metric({ icon, label, value, detail, tone }: { icon: ReactNode; label: string; value: string; detail: string; tone: string }) {
   return <div className="metric-card"><div className={`metric-icon ${tone}`}>{icon}<span className="metric-spark"/></div><span className="metric-label">{label}</span><strong>{value}</strong><small>{detail}</small></div>;
 }
 
