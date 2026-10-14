@@ -344,7 +344,7 @@ function App() {
           {section === "settings" && <SettingsPage version={version}/>}
         </div>}
       </div>
-      <footer className="status-bar"><span><span className="status-light"/> NEXUS работает локально</span><span>Версия {version} <span className="status-separator">·</span> Данные остаются на этом устройстве</span></footer>
+      <footer className="status-bar"><span><span className="status-light"/> NEXUS работает локально</span>{pageError && <span className="error-status">{pageError}</span>}<span>Версия {version} <span className="status-separator">·</span> Данные остаются на этом устройстве</span></footer>
     </main>
 
     {showAdd && <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setShowAdd(false); }}>
