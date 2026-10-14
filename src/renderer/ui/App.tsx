@@ -72,6 +72,7 @@ function App() {
   const syncBounds = useCallback(() => {
     const node = viewportRef.current;
     if (!node || !activeTab) return;
+    if (showAdd) { void window.nexus.setBounds(activeTab, null); return; }
     const rect = node.getBoundingClientRect();
     if (rect.width < 2 || rect.height < 2) {
       void window.nexus.setBounds(activeTab, null);
@@ -81,7 +82,7 @@ function App() {
       x: Math.round(rect.left), y: Math.round(rect.top),
       width: Math.max(1, Math.round(rect.width)), height: Math.max(1, Math.round(rect.height))
     });
-  }, [activeTab]);
+  }, [activeTab, showAdd]);
 
   useEffect(() => {
     const node = viewportRef.current;
