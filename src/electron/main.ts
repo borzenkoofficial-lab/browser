@@ -1,35 +1,13 @@
 import { app, BrowserWindow, WebContentsView, ipcMain, shell, dialog } from "electron";
 import path from "node:path";
-import fs from "node:fs/promises";
 import { normalizeWebUrl } from "./url";
+import { createBackup, initializeDatabase, listRecords, replaceRecords, restoreBackup } from "./storage/database";
 
 const isDev = !app.isPackaged;
 let mainWindow: BrowserWindow | null = null;
 let downloadsConfigured = false;
 const browserViews = new Map<string, WebContentsView>();
 const viewBounds = new Map<string, { x: number; y: number; width: number; height: number }>();
-const dataFile = () => path.join(app.getPath("userData"), "prospects.json");
-const namedDataFile = (name: string) => path.join(app.getPath("userData"), name);
-
-async function readProspects(): Promise<unknown[]> {
-  try { return JSON.parse(await fs.readFile(dataFile(), "utf8")) as unknown[]; }
-  catch { return []; }
-}
-async function writeProspects(value: unknown[]): Promise<void> {
-  await fs.mkdir(path.dirname(dataFile()), { recursive: true });
-  await fs.writeFile(dataFile(), JSON.stringify(value, null, 2), "utf8");
-}
-async function readNamedData(name: string): Promise<unknown[]> {
-  if (!["bookmarks.json", "history.json"].includes(name)) throw new Error("Недопустимое хранилище");
-  try { return JSON.parse(await fs.readFile(namedDataFile(name), "utf8")) as unknown[]; }
-  catch { return []; }
-}
-async function writeNamedData(name: string, value: unknown[]): Promise<boolean> {
-  if (!["bookmarks.json", "history.json"].includes(name)) throw new Error("Недопустимое хранилище");
-  await fs.mkdir(app.getPath("userData"), { recursive: true });
-  await fs.writeFile(namedDataFile(name), JSON.stringify(value, null, 2), "utf8");
-  return true;
-}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -149,13 +127,41 @@ ipcMain.handle("browser:extract", async (_event, id: string) => {
   const page = await view.webContents.executeJavaScript("({ title: document.title || \"\", description: document.querySelector(\"meta[name='description']\")?.content || \"\", text: (document.body?.innerText || \"\").slice(0, 100000) })");
   return { url: view.webContents.getURL(), ...page };
 });
-ipcMain.handle("prospects:list", readProspects);
-ipcMain.handle("bookmarks:list", () => readNamedData("bookmarks.json"));
-ipcMain.handle("bookmarks:save", (_event, records: unknown[]) => writeNamedData("bookmarks.json", records));
-ipcMain.handle("history:list", () => readNamedData("history.json"));
-ipcMain.handle("history:save", (_event, records: unknown[]) => writeNamedData("history.json", records));
-ipcMain.handle("prospects:save", async (_event, records: unknown[]) => { await writeProspects(records); return true; });
+ipcMain.handle("prospects:list", () => listRecords("prospects"));
+ipcMain.handle("bookmarks:list", () => listRecords("bookmarks"));
+ipcMain.handle("bookmarks:save", (_event, records: unknown) => replaceRecords("bookmarks", records));
+ipcMain.handle("history:list", () => listRecords("history"));
+ipcMain.handle("history:save", (_event, records: unknown) => replaceRecords("history", records));
+ipcMain.handle("prospects:save", (_event, records: unknown) => replaceRecords("prospects", records));
+ipcMain.handle("storage:backup", async () => {
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const result = await dialog.showSaveDialog({
+    title: "Создать резервную копию NEXUS",
+    defaultPath: path.join(app.getPath("userData"), "backups", `nexus-backup-${stamp}.sqlite`),
+    filters: [{ name: "SQLite backup", extensions: ["sqlite"] }]
+  });
+  if (result.canceled || !result.filePath) return { cancelled: true };
+  return { cancelled: false, ...(await createBackup(result.filePath)) };
+});
+ipcMain.handle("storage:restore", async () => {
+  const result = await dialog.showOpenDialog({
+    title: "Выберите резервную копию NEXUS",
+    properties: ["openFile"],
+    filters: [{ name: "SQLite backup", extensions: ["sqlite", "db"] }]
+  });
+  if (result.canceled || !result.filePaths[0]) return { cancelled: true };
+  return { cancelled: false, ...(await restoreBackup(result.filePaths[0])) };
+});
 ipcMain.handle("app:version", () => app.getVersion());
-app.whenReady().then(createWindow);
+app.whenReady().then(async () => {
+  try {
+    await initializeDatabase(app.getPath("userData"), path.join(app.getAppPath(), "node_modules", "sql.js", "dist", "sql-wasm.wasm"));
+    createWindow();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Не удалось открыть локальную базу";
+    dialog.showErrorBox("NEXUS — ошибка локальных данных", message + "\n\nИсходные JSON-файлы не удалены. Не переустанавливайте приложение поверх пользовательских данных; сохраните резервную копию и обратитесь в поддержку.");
+    app.quit();
+  }
+});
 app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
