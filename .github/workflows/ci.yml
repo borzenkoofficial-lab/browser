@@ -45,7 +45,7 @@ jobs:
       - name: Build Windows installer
         run: npm run dist:win
       - name: Upload installer artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: NEXUS-Business-Browser-Windows
           path: release/*.exe
