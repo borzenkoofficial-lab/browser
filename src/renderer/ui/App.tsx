@@ -177,7 +177,13 @@ function App() {
     try {
       const parsed = parseProspectsCsv(await file.text());
       const existing = new Set(prospects.map(p => (p.company.trim().toLowerCase() + "|" + p.website.trim().toLowerCase())));
-      const added = parsed.filter(p => !existing.has(p.company.trim().toLowerCase() + "|" + p.website.trim().toLowerCase())).map(p => ({ ...p, id: makeId() } as Prospect));
+      const added: Prospect[] = [];
+      for (const item of parsed) {
+        const key = item.company.trim().toLowerCase() + "|" + item.website.trim().toLowerCase();
+        if (existing.has(key)) continue;
+        existing.add(key);
+        added.push({ ...item, id: makeId() });
+      }
       await persistProspects([...added, ...prospects]);
       notify(`Импортировано компаний: ${added.length}; пропущено дублей: ${parsed.length - added.length}`);
     } catch (error) {
