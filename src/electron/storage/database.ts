@@ -64,6 +64,10 @@ function createSchema(database: Database.Database): void {
       version INTEGER PRIMARY KEY,
       applied_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS app_metadata (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS prospects (
       id TEXT PRIMARY KEY,
       company TEXT NOT NULL,
@@ -132,14 +136,20 @@ function saveRows(database: Database.Database, kind: DataKind, records: StoredRe
 function migrateLegacy(database: Database.Database, userDataPath: string): void {
   const fsSync = require("node:fs") as typeof import("node:fs");
   const migration = database.transaction(() => {
+    const marker = database.prepare("SELECT value FROM app_metadata WHERE key = ?").get("legacy_json_import_v1");
+    if (marker) return;
     const hasData = (database.prepare("SELECT COUNT(*) AS count FROM prospects").get() as { count: number }).count
       + (database.prepare("SELECT COUNT(*) AS count FROM bookmarks").get() as { count: number }).count
       + (database.prepare("SELECT COUNT(*) AS count FROM history").get() as { count: number }).count;
-    if (hasData > 0) return;
+    if (hasData > 0) {
+      database.prepare("INSERT OR REPLACE INTO app_metadata(key, value) VALUES (?, ?)").run("legacy_json_import_v1", "skipped-existing-sqlite-data");
+      return;
+    }
     for (const kind of Object.keys(LEGACY_FILES) as DataKind[]) {
       const filePath = path.join(userDataPath, LEGACY_FILES[kind]);
       if (fsSync.existsSync(filePath)) saveRows(database, kind, readLegacyRecords(filePath, kind));
     }
+    database.prepare("INSERT INTO app_metadata(key, value) VALUES (?, ?)").run("legacy_json_import_v1", new Date().toISOString());
   });
   migration();
 }
