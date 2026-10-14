@@ -26,6 +26,12 @@ export function getDatabasePath(userDataPath: string): string {
   return path.join(userDataPath, "nexus.sqlite");
 }
 
+function sameFilePath(left: string, right: string): boolean {
+  const a = path.resolve(left);
+  const b = path.resolve(right);
+  return process.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b;
+}
+
 function db(): SqlDatabase {
   if (!connection) throw new Error("Локальная база ещё не инициализирована");
   return connection;
@@ -278,18 +284,25 @@ export function replaceRecords(kind: DataKind, input: unknown): boolean {
 
 export async function createBackup(destinationPath: string): Promise<{ path: string; integrity: string }> {
   if (!activePath || !connection || !sqlModule) throw new Error("Локальная база ещё не инициализирована");
-  if (path.resolve(destinationPath) === path.resolve(activePath)) throw new Error("Нельзя перезаписать рабочую базу резервной копией");
+  if (sameFilePath(destinationPath, activePath)) throw new Error("Нельзя перезаписать рабочую базу резервной копией");
   await fs.mkdir(path.dirname(destinationPath), { recursive: true });
-  await fs.copyFile(activePath, destinationPath);
-  const check = new sqlModule.Database(new Uint8Array(await fs.readFile(destinationPath)));
-  try { validateBackupDatabase(check); }
-  finally { check.close(); }
-  return { path: destinationPath, integrity: "ok" };
+  const tempPath = `${destinationPath}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    await fs.copyFile(activePath, tempPath, fsSync.constants.COPYFILE_EXCL);
+    const check = new sqlModule.Database(new Uint8Array(await fs.readFile(tempPath)));
+    try { validateBackupDatabase(check); }
+    finally { check.close(); }
+    await fs.rename(tempPath, destinationPath);
+    return { path: destinationPath, integrity: "ok" };
+  } catch (error) {
+    await fs.rm(tempPath, { force: true }).catch(() => undefined);
+    throw error;
+  }
 }
 
 export async function restoreBackup(sourcePath: string): Promise<{ restored: boolean; safetyBackupPath: string }> {
   if (!activePath || !connection || !sqlModule) throw new Error("Локальная база ещё не инициализирована");
-  if (path.resolve(sourcePath) === path.resolve(activePath)) throw new Error("Нельзя восстановить базу из самого рабочего файла");
+  if (sameFilePath(sourcePath, activePath)) throw new Error("Нельзя восстановить базу из самого рабочего файла");
   const SQL = sqlModule;
   const restoredDb = new SQL.Database(new Uint8Array(await fs.readFile(sourcePath)));
   try { validateBackupDatabase(restoredDb); }
