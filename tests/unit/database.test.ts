@@ -160,14 +160,22 @@ describe("SQLite repository storage", () => {
   });
 
   it("stores suppliers and includes vendor records in backups", async () => {
-    const supplier = { id: "supplier-1", name: "ООО Материалы", category: "Материалы", contact: "Иван", phone: "+7 900 000-00-00", email: "sales@example.ru", website: "https://example.ru", region: "Москва", paymentTerms: "Оплата по факту", deliveryDays: 3, rating: 4, status: "Активен", notes: "Тест", createdAt: "2026-10-14T00:00:00.000Z", updatedAt: "2026-10-14T00:00:00.000Z" };
-    expect(replaceRecords("suppliers", [supplier])).toBe(true);
+    await setup();
+    const supplier = {
+      id: "sup1", name: "ООО Поставка", category: "Материалы", contact: "Иван",
+      phone: "+79990000000", email: "sales@example.ru", website: "https://example.ru",
+      region: "Москва", paymentTerms: "Отсрочка 7 дней", deliveryDays: 3, rating: 4,
+      status: "Активен", notes: "Проверенный поставщик",
+      createdAt: "2026-10-14T10:00:00.000Z", updatedAt: "2026-10-14T10:00:00.000Z"
+    };
+    replaceRecords("suppliers", [supplier]);
     expect(listRecords("suppliers")).toEqual([supplier]);
-    const backup = await createBackupBufferForTests();
-    const restored = await readBackupBufferForTests(backup);
-    expect(restored.suppliers).toEqual([supplier]);
+    const backupPath = path.join(tempDir, "backups", "suppliers.sqlite");
+    expect((await createBackup(backupPath)).integrity).toBe("ok");
+    replaceRecords("suppliers", []);
+    await restoreBackup(backupPath);
+    expect(listRecords("suppliers")).toEqual([supplier]);
   });
-
   it("stores finance entries and restores them from a backup", async () => {
     await setup();
     const entry = {
