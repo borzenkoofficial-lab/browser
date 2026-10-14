@@ -1,7 +1,7 @@
 export type CsvProspectRow = {
   company: string; website: string; contact: string; email: string; phone: string; location: string; nextAction: string; followUpDate: string;
   industry: string; status: "Новый" | "В работе" | "Приоритет" | "Не подходит";
-  source: string; sourceUrl: string; sourceCapturedAt: string; notes: string; tags: string[];
+  source: string; sourceUrl: string; sourceCapturedAt: string; notes: string; tags: string[]; createdAt: string;
 };
 
 function parseRecords(text: string, delimiter: string): string[][] {
