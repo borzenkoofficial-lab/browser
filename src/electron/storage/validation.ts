@@ -121,7 +121,7 @@ export function validateObject(value: unknown): JsonRecord {
         throw new Error(`Некорректное поле: shifts[${index}].${field}`);
       }
     }
-    if (shift.workers > 10000 || shift.hours > 24 * 31) throw new Error("Некорректная продолжительность смены или число работников");
+    if (Number(shift.workers) > 10000 || Number(shift.hours) > 24 * 31) throw new Error("Некорректная продолжительность смены или число работников");
   });
   return { ...item, id, name, plannedRevenue };
 }
