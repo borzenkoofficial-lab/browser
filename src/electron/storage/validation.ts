@@ -28,6 +28,17 @@ export function validateProspect(value: unknown): JsonRecord {
   for (const field of ["website", "contact", "email", "phone", "location", "nextAction", "followUpDate", "industry", "status", "source", "notes", "createdAt"]) {
     if (item[field] !== undefined) requireString(item[field], field);
   }
+  if (item.tags !== undefined) {
+    if (!Array.isArray(item.tags) || item.tags.length > 20) throw new Error("Некорректное поле: tags");
+    item.tags.forEach((tag, index) => requireString(tag, `tags[${index}]`, 100));
+  }
+  if (item.activity !== undefined) {
+    if (!Array.isArray(item.activity) || item.activity.length > 100) throw new Error("Некорректное поле: activity");
+    item.activity.forEach((entry, index) => {
+      const activity = requireRecord(entry, `activity[${index}]`);
+      for (const field of ["id", "date", "type", "note"]) requireString(activity[field], `activity[${index}].${field}`, field === "note" ? 5000 : 200);
+    });
+  }
   return { ...item, id, company };
 }
 
