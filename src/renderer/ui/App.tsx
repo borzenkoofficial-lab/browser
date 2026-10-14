@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { parseProspectsCsv } from "../lib/csv";
+import { findProspectByWebsite } from "../lib/prospect-matching";
 import {
   Activity, ArrowDownToLine, ArrowLeft, ArrowRight, Bell, Bookmark,
   Building2, CalendarClock, Calculator, Check, ChevronDown, CircleHelp, Command, Compass, Download, ExternalLink,
@@ -371,24 +372,65 @@ function App() {
     if (!active) { notify("Сначала открой сайт компании"); return; }
     const current = active;
     const host = shortHost(current.url);
+    let pageTitle = host;
+    let description = "";
+    let pageText = "";
+    let extractionFailed = false;
     try {
       const details = await window.nexus.extractPage(current.id);
-      const emails = [...new Set(details.text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) || [])];
-      const phones = [...new Set(details.text.match(/(?:\+?\d[\d\s().-]{7,}\d)/g) || [])];
-      setForm(prev => ({
-        ...prev,
-        company: prev.company || details.title || host,
-        website: current.url,
-        email: prev.email || emails[0] || "",
-        phone: prev.phone || phones[0] || "",
-        notes: prev.notes || details.description || "",
-        source: "Открытая вкладка"
-      }));
+      pageTitle = details.title?.trim() || host;
+      description = details.description?.trim() || "";
+      pageText = details.text || "";
     } catch {
-      setForm(prev => ({ ...prev, company: prev.company || host, website: current.url, source: "Открытая вкладка" }));
-      notify("Не удалось прочитать страницу — заполните карточку вручную");
+      extractionFailed = true;
     }
-    setEditing(null);
+
+    const emails = [...new Set(pageText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) || [])];
+    const phones = [...new Set(pageText.match(/(?:\+?\d[\d\s().-]{7,}\d)/g) || [])];
+    const existing = findProspectByWebsite(prospects, current.url);
+    if (existing) {
+      setEditing(existing);
+      setForm({
+        company: existing.company || pageTitle,
+        website: existing.website || current.url,
+        contact: existing.contact || "",
+        email: existing.email || emails[0] || "",
+        phone: existing.phone || phones[0] || "",
+        location: existing.location || "Москва и Московская область",
+        nextAction: existing.nextAction || "",
+        followUpDate: existing.followUpDate || "",
+        industry: existing.industry || "Строительство",
+        status: existing.status || "Новый",
+        source: existing.source || "Открытая вкладка",
+        notes: existing.notes || description,
+        tags: (existing.tags ?? []).join(", "),
+        activityType: "Звонок",
+        activityNote: ""
+      });
+      notify(extractionFailed
+        ? "Компания уже в базе. Открыта карточка; сайт не удалось прочитать."
+        : "Компания уже в базе — открыта существующая карточка");
+    } else {
+      setEditing(null);
+      setForm({
+        company: pageTitle,
+        website: current.url,
+        contact: "",
+        email: emails[0] || "",
+        phone: phones[0] || "",
+        location: "Москва и Московская область",
+        nextAction: "Связаться для обсуждения сотрудничества",
+        followUpDate: "",
+        industry: "Строительство",
+        status: "Новый",
+        source: "Открытая вкладка",
+        notes: description,
+        tags: "",
+        activityType: "Звонок",
+        activityNote: ""
+      });
+      if (extractionFailed) notify("Не удалось прочитать страницу — данные можно заполнить вручную");
+    }
     setShowAdd(true);
   };
 
