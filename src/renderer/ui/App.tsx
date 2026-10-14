@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { parseProspectsCsv } from "../lib/csv";
 import { findProspectByWebsite } from "../lib/prospect-matching";
+import { extractContactCandidates, formatContactCandidatesNote } from "../lib/contact-extraction";
 import {
   Activity, ArrowDownToLine, ArrowLeft, ArrowRight, Bell, Bookmark,
   Building2, CalendarClock, Calculator, Check, ChevronDown, CircleHelp, Command, Compass, Download, ExternalLink,
@@ -385,8 +386,9 @@ function App() {
       extractionFailed = true;
     }
 
-    const emails = [...new Set(pageText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) || [])];
-    const phones = [...new Set(pageText.match(/(?:\+?\d[\d\s().-]{7,}\d)/g) || [])];
+    const { emails, phones } = extractContactCandidates(pageText);
+    const candidateNote = formatContactCandidatesNote(emails, phones);
+    const pageNotes = [description, candidateNote].filter(Boolean).join("\n\n");
     const existing = findProspectByWebsite(prospects, current.url);
     if (existing) {
       setEditing(existing);
@@ -402,7 +404,7 @@ function App() {
         industry: existing.industry || "Строительство",
         status: existing.status || "Новый",
         source: existing.source || "Открытая вкладка",
-        notes: existing.notes || description,
+        notes: candidateNote && existing.notes?.includes(candidateNote) ? existing.notes : [existing.notes, candidateNote].filter(Boolean).join("\n\n") || description,
         tags: (existing.tags ?? []).join(", "),
         activityType: "Звонок",
         activityNote: ""
@@ -424,7 +426,7 @@ function App() {
         industry: "Строительство",
         status: "Новый",
         source: "Открытая вкладка",
-        notes: description,
+        notes: pageNotes,
         tags: "",
         activityType: "Звонок",
         activityNote: ""
