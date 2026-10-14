@@ -55,6 +55,8 @@ function App() {
   const [storageBusy, setStorageBusy] = useState(false);
   const [form, setForm] = useState({ company: "", website: "", contact: "", email: "", phone: "", location: "Москва и Московская область", nextAction: "", followUpDate: "", industry: "Строительство", status: "Новый" as Prospect["status"], source: "Сайт компании", notes: "", tags: "", activityType: "Звонок", activityNote: "" });
   const viewportRef = useRef<HTMLDivElement>(null);
+  const activeTabRef = useRef<string | null>(activeTab);
+  activeTabRef.current = activeTab;
   const active = tabs.find(tab => tab.id === activeTab) ?? null;
 
   const notify = (message: string) => {
@@ -84,10 +86,10 @@ function App() {
       });
     });
     const offError = window.nexus.onError(({ id, description }) => {
-      if (id === activeTab) setPageError(description || "Не удалось загрузить страницу");
+      if (id === activeTabRef.current) setPageError(description || "Не удалось загрузить страницу");
     });
     return () => { offTitle(); offNavigate(); offError(); };
-  }, [activeTab]);
+  }, []);
 
   const syncBounds = useCallback(() => {
     const node = viewportRef.current;
