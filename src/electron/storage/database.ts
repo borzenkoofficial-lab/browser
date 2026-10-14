@@ -1,14 +1,19 @@
-import Database from "better-sqlite3";
+import initSqlJs from "sql.js";
+import type { Database as SqlDatabase, SqlJsStatic } from "sql.js";
 import fs from "node:fs/promises";
 import * as fsSync from "node:fs";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { validateBookmark, validateHistoryItem, validateProspect, requireArray } from "./validation";
 
 export type StoredRecord = Record<string, unknown>;
 type DataKind = "prospects" | "bookmarks" | "history";
+type SqlValue = string | number | null | Uint8Array;
 
 const MIGRATION_VERSION = 1;
-let connection: Database.Database | null = null;
+const requireFromProject = createRequire(path.join(process.cwd(), "package.json"));
+let connection: SqlDatabase | null = null;
+let sqlModule: SqlJsStatic | null = null;
 let activePath = "";
 
 const LEGACY_FILES: Record<DataKind, string> = {
@@ -21,9 +26,43 @@ export function getDatabasePath(userDataPath: string): string {
   return path.join(userDataPath, "nexus.sqlite");
 }
 
-function db(): Database.Database {
+function db(): SqlDatabase {
   if (!connection) throw new Error("Локальная база ещё не инициализирована");
   return connection;
+}
+
+function queryRows(database: SqlDatabase, sql: string, values: SqlValue[] = []): Array<Record<string, unknown>> {
+  const statement = database.prepare(sql);
+  try {
+    statement.bind(values);
+    const rows: Array<Record<string, unknown>> = [];
+    while (statement.step()) rows.push(statement.getAsObject() as Record<string, unknown>);
+    return rows;
+  } finally {
+    statement.free();
+  }
+}
+
+function run(database: SqlDatabase, sql: string, values: SqlValue[] = []): void {
+  database.run(sql, values);
+}
+
+function persistDatabase(database: SqlDatabase, destinationPath: string): void {
+  const tempPath = `${destinationPath}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    fsSync.writeFileSync(tempPath, Buffer.from(database.export()));
+    fsSync.renameSync(tempPath, destinationPath);
+  } catch (error) {
+    try { fsSync.rmSync(tempPath, { force: true }); } catch { /* best-effort cleanup */ }
+    throw error;
+  }
+}
+
+function integrityCheck(database: SqlDatabase): void {
+  const rows = queryRows(database, "PRAGMA integrity_check");
+  if (rows.length !== 1 || rows[0].integrity_check !== "ok") {
+    throw new Error("Проверка целостности SQLite не пройдена");
+  }
 }
 
 function readLegacyRecords(filePath: string, kind: DataKind): StoredRecord[] {
@@ -55,9 +94,8 @@ async function preserveLegacyFiles(userDataPath: string): Promise<void> {
   }
 }
 
-function createSchema(database: Database.Database): void {
-  database.pragma("journal_mode = WAL");
-  database.pragma("foreign_keys = ON");
+function createSchema(database: SqlDatabase): void {
+  database.run("PRAGMA foreign_keys = ON");
   database.exec(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       version INTEGER PRIMARY KEY,
@@ -101,12 +139,11 @@ function createSchema(database: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_history_url ON history(url);
     CREATE INDEX IF NOT EXISTS idx_history_visited_at ON history(visited_at);
   `);
-  database.prepare("INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)").run(MIGRATION_VERSION, new Date().toISOString());
+  run(database, "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)", [MIGRATION_VERSION, new Date().toISOString()]);
 }
 
-function saveRows(database: Database.Database, kind: DataKind, records: StoredRecord[]): void {
+function saveRows(database: SqlDatabase, kind: DataKind, records: StoredRecord[]): void {
   if (records.length === 0) return;
-  const table = kind;
   const validator = kind === "prospects" ? validateProspect : kind === "bookmarks" ? validateBookmark : validateHistoryItem;
   const rows = records.map(record => {
     const item = validator(record);
@@ -128,55 +165,92 @@ function saveRows(database: Database.Database, kind: DataKind, records: StoredRe
   const columns = kind === "prospects"
     ? "id,company,website,contact,email,phone,industry,status,source,notes,created_at,payload_json"
     : kind === "bookmarks" ? "id,title,url,created_at,payload_json" : "id,title,url,visited_at,payload_json";
-  const placeholders = rows.length ? Object.keys(rows[0]).map(() => "?").join(",") : "";
-  const insert = database.prepare(`INSERT INTO ${table} (${columns}) VALUES (${placeholders})`);
-  for (const row of rows) insert.run(...Object.values(row));
+  const placeholders = Object.keys(rows[0]).map(() => "?").join(",");
+  const statement = database.prepare(`INSERT INTO ${kind} (${columns}) VALUES (${placeholders})`);
+  try {
+    for (const row of rows) {
+      statement.run(Object.values(row) as SqlValue[]);
+      statement.reset();
+    }
+  } finally {
+    statement.free();
+  }
 }
 
-function migrateLegacy(database: Database.Database, userDataPath: string): void {
-  const migration = database.transaction(() => {
-    const marker = database.prepare("SELECT value FROM app_metadata WHERE key = ?").get("legacy_json_import_v1");
-    if (marker) return;
-    const hasData = (database.prepare("SELECT COUNT(*) AS count FROM prospects").get() as { count: number }).count
-      + (database.prepare("SELECT COUNT(*) AS count FROM bookmarks").get() as { count: number }).count
-      + (database.prepare("SELECT COUNT(*) AS count FROM history").get() as { count: number }).count;
-    if (hasData > 0) {
-      database.prepare("INSERT OR REPLACE INTO app_metadata(key, value) VALUES (?, ?)").run("legacy_json_import_v1", "skipped-existing-sqlite-data");
+function migrateLegacy(database: SqlDatabase, userDataPath: string): void {
+  run(database, "BEGIN TRANSACTION");
+  try {
+    const marker = queryRows(database, "SELECT value FROM app_metadata WHERE key = ?", ["legacy_json_import_v1"]);
+    if (marker.length) {
+      run(database, "COMMIT");
+      return;
+    }
+    const countRows = queryRows(database, "SELECT (SELECT COUNT(*) FROM prospects) + (SELECT COUNT(*) FROM bookmarks) + (SELECT COUNT(*) FROM history) AS count");
+    if (Number(countRows[0]?.count ?? 0) > 0) {
+      run(database, "INSERT OR REPLACE INTO app_metadata(key, value) VALUES (?, ?)", ["legacy_json_import_v1", "skipped-existing-sqlite-data"]);
+      run(database, "COMMIT");
       return;
     }
     for (const kind of Object.keys(LEGACY_FILES) as DataKind[]) {
       const filePath = path.join(userDataPath, LEGACY_FILES[kind]);
       if (fsSync.existsSync(filePath)) saveRows(database, kind, readLegacyRecords(filePath, kind));
     }
-    database.prepare("INSERT INTO app_metadata(key, value) VALUES (?, ?)").run("legacy_json_import_v1", new Date().toISOString());
-  });
-  migration();
+    run(database, "INSERT INTO app_metadata(key, value) VALUES (?, ?)", ["legacy_json_import_v1", new Date().toISOString()]);
+    run(database, "COMMIT");
+  } catch (error) {
+    try { run(database, "ROLLBACK"); } catch { /* transaction may already be closed */ }
+    throw error;
+  }
 }
 
-export async function initializeDatabase(userDataPath: string): Promise<void> {
+function validateBackupDatabase(database: SqlDatabase): void {
+  integrityCheck(database);
+  const versionRows = queryRows(database, "SELECT MAX(version) AS version FROM schema_migrations");
+  const version = Number(versionRows[0]?.version ?? 0);
+  if (!version || version > MIGRATION_VERSION) throw new Error("Версия резервной копии несовместима с этой версией приложения");
+  for (const table of ["prospects", "bookmarks", "history"]) {
+    const found = queryRows(database, "SELECT name FROM sqlite_master WHERE type='table' AND name=?", [table]);
+    if (!found.length) throw new Error("В резервной копии отсутствуют необходимые таблицы");
+    const payloads = queryRows(database, `SELECT payload_json FROM ${table}`);
+    const validator = table === "prospects" ? validateProspect : table === "bookmarks" ? validateBookmark : validateHistoryItem;
+    for (const row of payloads) {
+      let parsed: unknown;
+      try { parsed = JSON.parse(String(row.payload_json)); }
+      catch { throw new Error(`В резервной копии повреждены данные таблицы ${table}`); }
+      validator(parsed);
+    }
+  }
+}
+
+export async function initializeDatabase(userDataPath: string, wasmPath?: string): Promise<void> {
   await fs.mkdir(userDataPath, { recursive: true });
   await preserveLegacyFiles(userDataPath);
   const dbPath = getDatabasePath(userDataPath);
-  const next = new Database(dbPath);
+  const wasmFile = wasmPath ?? requireFromProject.resolve("sql.js/dist/sql-wasm.wasm");
+  const SQL = await initSqlJs({ locateFile: () => wasmFile });
+  let next: SqlDatabase | null = null;
   try {
+    if (fsSync.existsSync(dbPath)) {
+      next = new SQL.Database(new Uint8Array(fsSync.readFileSync(dbPath)));
+    } else {
+      next = new SQL.Database();
+    }
     createSchema(next);
     migrateLegacy(next, userDataPath);
-    const integrity = next.pragma("integrity_check") as Array<{ integrity_check: string }>;
-    if (integrity.length !== 1 || integrity[0].integrity_check !== "ok") {
-      throw new Error("Проверка целостности SQLite не пройдена");
-    }
+    integrityCheck(next);
+    persistDatabase(next, dbPath);
   } catch (error) {
-    next.close();
+    next?.close();
     throw error;
   }
   connection?.close();
+  sqlModule = SQL;
   connection = next;
   activePath = dbPath;
 }
 
 export function listRecords(kind: DataKind): StoredRecord[] {
-  const rows = db().prepare(`SELECT payload_json FROM ${kind}`).all() as Array<{ payload_json: string }>;
-  return rows.map(row => JSON.parse(row.payload_json) as StoredRecord);
+  return queryRows(db(), `SELECT payload_json FROM ${kind}`).map(row => JSON.parse(String(row.payload_json)) as StoredRecord);
 }
 
 export function replaceRecords(kind: DataKind, input: unknown): boolean {
@@ -184,71 +258,62 @@ export function replaceRecords(kind: DataKind, input: unknown): boolean {
   const validator = kind === "prospects" ? validateProspect : kind === "bookmarks" ? validateBookmark : validateHistoryItem;
   const validated = records.map(validator);
   const database = db();
-  const replace = database.transaction(() => {
-    database.prepare(`DELETE FROM ${kind}`).run();
+  const SQL = sqlModule;
+  if (!SQL) throw new Error("SQLite-модуль ещё не инициализирован");
+  const snapshot = database.export();
+  try {
+    run(database, "BEGIN TRANSACTION");
+    run(database, `DELETE FROM ${kind}`);
     saveRows(database, kind, validated);
-  });
-  replace();
+    run(database, "COMMIT");
+    persistDatabase(database, activePath);
+  } catch (error) {
+    try { run(database, "ROLLBACK"); } catch { /* transaction may already be committed */ }
+    database.close();
+    connection = new SQL.Database(snapshot);
+    throw error;
+  }
   return true;
 }
 
 export async function createBackup(destinationPath: string): Promise<{ path: string; integrity: string }> {
-  if (!activePath) throw new Error("Локальная база ещё не инициализирована");
+  if (!activePath || !connection || !sqlModule) throw new Error("Локальная база ещё не инициализирована");
+  if (path.resolve(destinationPath) === path.resolve(activePath)) throw new Error("Нельзя перезаписать рабочую базу резервной копией");
   await fs.mkdir(path.dirname(destinationPath), { recursive: true });
-  await db().backup(destinationPath);
-  const check = new Database(destinationPath, { readonly: true, fileMustExist: true });
-  try {
-    const result = check.pragma("integrity_check") as Array<{ integrity_check: string }>;
-    if (result.length !== 1 || result[0].integrity_check !== "ok") throw new Error("Резервная копия не прошла проверку целостности");
-  } finally { check.close(); }
+  await fs.copyFile(activePath, destinationPath);
+  const check = new sqlModule.Database(new Uint8Array(await fs.readFile(destinationPath)));
+  try { validateBackupDatabase(check); }
+  finally { check.close(); }
   return { path: destinationPath, integrity: "ok" };
 }
 
 export async function restoreBackup(sourcePath: string): Promise<{ restored: boolean; safetyBackupPath: string }> {
-  if (!activePath) throw new Error("Локальная база ещё не инициализирована");
+  if (!activePath || !connection || !sqlModule) throw new Error("Локальная база ещё не инициализирована");
   if (path.resolve(sourcePath) === path.resolve(activePath)) throw new Error("Нельзя восстановить базу из самого рабочего файла");
-  const source = new Database(sourcePath, { readonly: true, fileMustExist: true });
-  try {
-    const result = source.pragma("integrity_check") as Array<{ integrity_check: string }>;
-    if (result.length !== 1 || result[0].integrity_check !== "ok") throw new Error("Выбранная копия повреждена");
-    const version = source.prepare("SELECT MAX(version) AS version FROM schema_migrations").get() as { version: number | null };
-    if (!version.version || version.version > MIGRATION_VERSION) throw new Error("Версия резервной копии несовместима с этой версией приложения");
-    for (const table of ["prospects", "bookmarks", "history"]) {
-      const exists = source.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table);
-      if (!exists) throw new Error("В резервной копии отсутствуют необходимые таблицы");
-    }
-  } finally { source.close(); }
+  const SQL = sqlModule;
+  const restoredDb = new SQL.Database(new Uint8Array(await fs.readFile(sourcePath)));
+  try { validateBackupDatabase(restoredDb); }
+  catch (error) { restoredDb.close(); throw error; }
 
   const safetyBackupPath = path.join(path.dirname(activePath), "backups", `before-restore-${new Date().toISOString().replace(/[:.]/g, "-")}.sqlite`);
   await createBackup(safetyBackupPath);
-  const backupDb = new Database(sourcePath, { readonly: true, fileMustExist: true });
+  const previousSnapshot = connection.export();
+  const previousDb = connection;
   try {
-    const current = db();
-    const restore = current.transaction(() => {
-      for (const table of ["prospects", "bookmarks", "history"]) {
-        current.prepare(`DELETE FROM ${table}`).run();
-        const rows = backupDb.prepare(`SELECT * FROM ${table}`).all() as Array<Record<string, unknown>>;
-        if (table === "prospects") {
-          const stmt = current.prepare("INSERT INTO prospects(id,company,website,contact,email,phone,industry,status,source,notes,created_at,payload_json) VALUES (@id,@company,@website,@contact,@email,@phone,@industry,@status,@source,@notes,@created_at,@payload_json)");
-          for (const row of rows) stmt.run(row);
-        } else if (table === "bookmarks") {
-          const stmt = current.prepare("INSERT INTO bookmarks(id,title,url,created_at,payload_json) VALUES (@id,@title,@url,@created_at,@payload_json)");
-          for (const row of rows) stmt.run(row);
-        } else {
-          const stmt = current.prepare("INSERT INTO history(id,title,url,visited_at,payload_json) VALUES (@id,@title,@url,@visited_at,@payload_json)");
-          for (const row of rows) stmt.run(row);
-        }
-      }
-    });
-    restore();
-  } finally { backupDb.close(); }
-  const integrity = db().pragma("integrity_check") as Array<{ integrity_check: string }>;
-  if (integrity.length !== 1 || integrity[0].integrity_check !== "ok") throw new Error("Восстановление завершилось ошибкой проверки целостности");
+    connection = restoredDb;
+    persistDatabase(restoredDb, activePath);
+    previousDb.close();
+  } catch (error) {
+    restoredDb.close();
+    connection = new SQL.Database(previousSnapshot);
+    throw error;
+  }
   return { restored: true, safetyBackupPath };
 }
 
 export function closeDatabase(): void {
   connection?.close();
   connection = null;
+  sqlModule = null;
   activePath = "";
 }
