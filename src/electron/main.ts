@@ -1,6 +1,7 @@
 import { app, BrowserWindow, WebContentsView, ipcMain, shell } from "electron";
 import path from "node:path";
 import fs from "node:fs/promises";
+import { normalizeWebUrl } from "./url";
 
 const isDev = !app.isPackaged;
 let mainWindow: BrowserWindow | null = null;
@@ -43,17 +44,6 @@ function syncActiveBounds() {
   }
 }
 
-function validUrl(input: string): string {
-  const value = input.trim();
-  if (!value) return "https://www.google.com";
-  if (/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(value)) {
-    const parsed = new URL(value);
-    if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("Разрешены только HTTP и HTTPS");
-    return parsed.toString();
-  }
-  if (value.includes(".") && !value.includes(" ")) return "https://" + value;
-  return "https://www.google.com/search?q=" + encodeURIComponent(value);
-}
 
 ipcMain.handle("browser:create", async (_event, id: string, initialUrl?: string) => {
   if (!mainWindow || browserViews.has(id)) return;
@@ -85,12 +75,12 @@ ipcMain.handle("browser:create", async (_event, id: string, initialUrl?: string)
   view.webContents.on("did-fail-load", (_e, code, description, url, isMainFrame) => {
     if (isMainFrame && code !== -3) mainWindow?.webContents.send("browser:error", { id, code, description, url });
   });
-  await view.webContents.loadURL(validUrl(initialUrl ?? "https://www.google.com"));
+  await view.webContents.loadURL(normalizeWebUrl(initialUrl ?? "https://www.google.com"));
 });
 
 ipcMain.handle("browser:navigate", async (_event, id: string, url: string) => {
   const view = browserViews.get(id);
-  if (view) await view.webContents.loadURL(validUrl(url));
+  if (view) await view.webContents.loadURL(normalizeWebUrl(url));
 });
 ipcMain.handle("browser:back", (_event, id: string) => {
   const view = browserViews.get(id);
