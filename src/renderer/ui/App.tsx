@@ -404,7 +404,7 @@ function App() {
         industry: existing.industry || "Строительство",
         status: existing.status || "Новый",
         source: existing.source || "Открытая вкладка",
-        notes: [existing.notes, candidateNote].filter(Boolean).join("\n\n") || description,
+        notes: candidateNote && existing.notes?.includes(candidateNote) ? existing.notes : [existing.notes, candidateNote].filter(Boolean).join("\n\n") || description,
         tags: (existing.tags ?? []).join(", "),
         activityType: "Звонок",
         activityNote: ""
