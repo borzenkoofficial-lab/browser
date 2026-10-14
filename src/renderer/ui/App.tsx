@@ -588,6 +588,68 @@ function ProspectsPage({ prospects, query, setQuery, statusFilter, setStatusFilt
 
 
 
+
+const createBlankSupplier = (): Supplier => {
+  const now = new Date().toISOString();
+  return { id: makeId(), name: "", category: "Материалы", contact: "", phone: "", email: "", website: "", region: "Москва и Московская область", paymentTerms: "", deliveryDays: 0, rating: 0, status: "Активен", notes: "", createdAt: now, updatedAt: now };
+};
+
+function SuppliersPage({ suppliers, onSave, onDelete }: { suppliers: Supplier[]; onSave: (item: Supplier) => void; onDelete: (id: string) => void }) {
+  const [activeId, setActiveId] = useState("new");
+  const [draft, setDraft] = useState<Supplier>(() => createBlankSupplier());
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("Все");
+  useEffect(() => {
+    if (activeId === "new") return;
+    const current = suppliers.find(item => item.id === activeId);
+    if (current) setDraft({ ...current });
+  }, [activeId, suppliers]);
+  const visible = suppliers.filter(item => {
+    const q = query.trim().toLowerCase();
+    const matches = !q || [item.name,item.category,item.contact,item.phone,item.email,item.region,item.paymentTerms,item.notes].some(value => (value || "").toLowerCase().includes(q));
+    return matches && (statusFilter === "Все" || item.status === statusFilter);
+  }).sort((a,b) => a.name.localeCompare(b.name, "ru"));
+  const activeCount = suppliers.filter(item => item.status === "Активен").length;
+  const rated = suppliers.filter(item => item.rating > 0);
+  const averageRating = rated.length ? rated.reduce((sum,item) => sum + item.rating, 0) / rated.length : 0;
+  const newSupplier = () => { setDraft(createBlankSupplier()); setActiveId("new"); };
+  const save = () => {
+    if (!draft.name.trim()) { alert("Укажите название поставщика."); return; }
+    if (!Number.isInteger(draft.deliveryDays) || draft.deliveryDays < 0 || draft.deliveryDays > 3650 || draft.rating < 0 || draft.rating > 5) { alert("Проверьте срок поставки и оценку."); return; }
+    const item = { ...draft, name: draft.name.trim(), updatedAt: new Date().toISOString() };
+    onSave(item);
+    setActiveId(item.id);
+  };
+  return <div className="standard-page suppliers-page">
+    <PageHeader eyebrow="ЗАКУПКИ И ПАРТНЁРЫ" title="Поставщики" description="Храните контакты поставщиков, условия оплаты, сроки поставки и внутреннюю оценку надёжности." action={<button className="button button-primary" onClick={newSupplier}><Plus size={16}/> Добавить поставщика</button>}/>
+    <div className="supplier-summary">
+      <div><span>Всего поставщиков</span><b>{suppliers.length}</b></div><div><span>Активные</span><b>{activeCount}</b></div><div><span>Средняя оценка</span><b>{averageRating ? averageRating.toLocaleString("ru-RU", { maximumFractionDigits: 1 }) + " / 5" : "Нет оценок"}</b></div>
+    </div>
+    <div className="suppliers-layout">
+      <section className="panel suppliers-list-panel"><div className="suppliers-list-toolbar"><div className="table-search"><Search size={15}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Поиск по названию, категории, контакту…"/></div><select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option>Все</option><option>Активен</option><option>На паузе</option></select></div>
+        {visible.length ? <div className="supplier-list">{visible.map(item => <button key={item.id} className={activeId === item.id ? "supplier-list-item active" : "supplier-list-item"} onClick={() => setActiveId(item.id)}><span className="supplier-list-icon"><Building2 size={16}/></span><span className="supplier-list-copy"><b>{item.name}</b><small>{item.category} · {item.region || "Регион не указан"}</small><small>{item.contact || item.phone || item.email || "Контакты не заполнены"}</small></span><span className={item.status === "Активен" ? "supplier-status active" : "supplier-status paused"}>{item.status}</span></button>)}</div> : <div className="estimate-empty">Поставщики не найдены. Добавьте карточку или измените фильтры.</div>}
+      </section>
+      <section className="panel supplier-editor"><div className="panel-heading"><div><h3>{activeId === "new" ? "Новый поставщик" : "Карточка поставщика"}</h3><p>Контакты и условия сотрудничества</p></div><Users size={18}/></div>
+        <div className="supplier-fields">
+          <label className="field full"><span>Название компании *</span><input value={draft.name} onChange={e => setDraft(p => ({ ...p, name: e.target.value }))} placeholder="ООО Поставщик"/></label>
+          <label className="field"><span>Категория</span><select value={draft.category} onChange={e => setDraft(p => ({ ...p, category: e.target.value }))}><option>Материалы</option><option>Вывоз и утилизация</option><option>Аренда оборудования</option><option>Инструмент</option><option>Транспорт и логистика</option><option>Рабочая сила</option><option>Прочее</option></select></label>
+          <label className="field"><span>Статус</span><select value={draft.status} onChange={e => setDraft(p => ({ ...p, status: e.target.value as Supplier["status"] }))}><option>Активен</option><option>На паузе</option></select></label>
+          <label className="field"><span>Контактное лицо</span><input value={draft.contact} onChange={e => setDraft(p => ({ ...p, contact: e.target.value }))} placeholder="Имя и должность"/></label>
+          <label className="field"><span>Телефон</span><input value={draft.phone} onChange={e => setDraft(p => ({ ...p, phone: e.target.value }))} placeholder="+7…"/></label>
+          <label className="field"><span>Email</span><input type="email" value={draft.email} onChange={e => setDraft(p => ({ ...p, email: e.target.value }))} placeholder="sales@company.ru"/></label>
+          <label className="field"><span>Сайт</span><input value={draft.website} onChange={e => setDraft(p => ({ ...p, website: e.target.value }))} placeholder="https://company.ru"/></label>
+          <label className="field full"><span>Регион</span><input value={draft.region} onChange={e => setDraft(p => ({ ...p, region: e.target.value }))} placeholder="Москва и Московская область"/></label>
+          <label className="field"><span>Условия оплаты</span><input value={draft.paymentTerms} onChange={e => setDraft(p => ({ ...p, paymentTerms: e.target.value }))} placeholder="Предоплата 50%, отсрочка…"/></label>
+          <label className="field"><span>Срок поставки, дней</span><input type="number" min="0" max="3650" step="1" value={draft.deliveryDays} onChange={e => setDraft(p => ({ ...p, deliveryDays: Number(e.target.value) }))}/></label>
+          <label className="field"><span>Оценка надёжности (0–5)</span><select value={draft.rating} onChange={e => setDraft(p => ({ ...p, rating: Number(e.target.value) }))}><option value={0}>Не оценён</option><option value={1}>1 — низкая</option><option value={2}>2</option><option value={3}>3 — средняя</option><option value={4}>4</option><option value={5}>5 — высокая</option></select></label>
+          <label className="field full"><span>Внутренние заметки</span><textarea rows={3} value={draft.notes} onChange={e => setDraft(p => ({ ...p, notes: e.target.value }))} placeholder="Цены, качество, надёжность, особенности работы…"/></label>
+        </div>
+        <div className="supplier-editor-actions">{activeId !== "new" && <button className="button button-danger" onClick={() => { onDelete(draft.id); newSupplier(); }}><Trash2 size={14}/> Удалить</button>}<button className="button button-primary" onClick={save}><Check size={15}/> Сохранить поставщика</button></div>
+      </section>
+    </div>
+  </div>;
+}
+
 const createBlankFinanceEntry = (): FinanceEntry => {
   const now = new Date().toISOString();
   return { id: makeId(), type: "Доход", title: "", category: "Оплата заказчика", amount: 0, date: localDateKey(), status: "План", counterparty: "", objectId: "", notes: "", createdAt: now, updatedAt: now };
