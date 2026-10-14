@@ -155,7 +155,7 @@ describe("SQLite repository storage", () => {
     await setup();
     expect(() => replaceRecords("objects", [{
       id: "o2", name: "Объект", shifts: [{ id: "s1", date: "2026-10-14", workers: 2, hours: 900, quantity: 1, revenue: 1, cost: 1, notes: "" }]
-    }])).toThrow(/продолжительности/);
+    }])).toThrow(/продолжительность/);
     expect(listRecords("objects")).toEqual([]);
   });
 
