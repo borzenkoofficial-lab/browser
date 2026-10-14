@@ -1,18 +1,29 @@
 # NEXUS Business Browser
 
-Business-first Windows browser for researching companies, organizing prospects, and moving public business information into a local workspace.
+**NEXUS Business Browser** — Windows-first browser workspace for B2B research and local prospect management.
 
-## Current direction
+The current codebase is an early MVP foundation. It combines a Chromium-powered browser window with a local company workspace. It is not yet a production release.
 
-- Electron + Chromium web contents for real website navigation
-- React + TypeScript desktop interface
-- Local-first prospect records and CSV workflows
-- Secure renderer/preload boundary; no Node.js access from remote pages
-- Windows NSIS installer
+## Current implementation
+
+- Electron + Chromium `WebContentsView` browser tabs
+- Address/search bar with HTTP(S)-only URL validation
+- Back, forward, reload, tab creation and tab closing
+- Local browser bookmarks and visit history
+- Local prospect records persisted in the Electron user-data directory
+- Company cards with industry, contact details, status, source and notes
+- Explicit user-triggered extraction of page title, meta description, visible text, email and phone candidates to prefill a company card
+- Search workflow for construction, contractors, property managers and other B2B categories
+- Search provider selection for Google, Bing and Yandex
+- CSV import/export, field validation and duplicate skipping
+- Dark desktop interface, local-data status, settings and Windows NSIS installer configuration
+- GitHub Actions workflow for tests/build and Windows installer artifact
 
 ## Development
 
-Requirements: Node.js LTS and npm.
+Requirements: Node.js 20 LTS or newer and npm.
+
+Run in PowerShell:
 
 ```powershell
 npm install
@@ -22,14 +33,21 @@ npm run build
 npm run dist:win
 ```
 
-## Product roadmap
+The Windows installer is generated under `release/`. The GitHub Actions workflow is configured to publish it as a workflow artifact after a successful Windows build.
 
-1. Browser shell, navigation, tabs, bookmarks, history and downloads
-2. Local prospect workspace with deduplication, filters and CSV import/export
-3. Page-assisted company capture with explicit user action
-4. AI research summaries through an optional user-configured provider
-5. Hardening, update strategy, licensing and closed pilot
+## Local data
+
+Prospects, bookmarks and history are stored under Electron's application user-data directory. No application server or paid AI provider is required for the current MVP.
+
+## Current limitations
+
+- Search starts a query in the selected search engine; it does not crawl the web or bypass site restrictions.
+- Page extraction only runs when the user clicks **Save company**. Extracted emails and phone numbers are suggestions and must be verified before use.
+- No AI provider integration, cloud sync, team accounts, licensing server or automatic update service is implemented yet.
+- Browser extension compatibility, advanced download management, password synchronization and full browser-profile import/export are not implemented.
+- The installer is not code-signed. Windows SmartScreen warnings may occur.
+- The project has not yet been verified by a successful local Windows build. Treat CI results as authoritative once a run completes.
 
 ## Security notes
 
-Remote pages are rendered in sandboxed web contents with context isolation and Node integration disabled. The application does not promise to bypass logins, paywalls, anti-bot controls, or site access restrictions. Verify each source's terms and applicable privacy law before automating collection.
+Remote pages do not receive Node.js access or the app's preload bridge. The renderer uses context isolation and sandboxing. New-window requests are restricted to HTTP(S) and opened externally. Page extraction is user-triggered and limited to visible page content. Do not use this browser to bypass access controls or collect data contrary to source terms or applicable privacy law.
