@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { parseProspectsCsv } from "../lib/csv";
 import {
   Activity, ArrowDownToLine, ArrowLeft, ArrowRight, Bell, Bookmark,
-  Building2, Check, ChevronDown, CircleHelp, Command, Compass, Download, ExternalLink,
+  Building2, CalendarClock, Check, ChevronDown, CircleHelp, Command, Compass, Download, ExternalLink,
   FileSpreadsheet, Filter, Globe2, History as HistoryIcon, LayoutDashboard, ListFilter, Menu,
   MoreHorizontal, Plus, Search, Settings2, ShieldCheck, Sparkles, Star, Target,
   Trash2, Users, WandSparkles, X, Zap
