@@ -14,3 +14,5 @@
 .settings-actions .secondary-button{background:var(--panel2);color:var(--text)}
 .settings-actions .secondary-button:hover:not(:disabled){background:#2a3242;border-color:#46516a}
 .settings-actions button:disabled{opacity:.5;cursor:wait}
+
+.follow-up{display:inline-flex;align-items:center;width:max-content;max-width:100%;font-size:9px;color:#8bd9b5;background:#203b34;border:1px solid #315548;border-radius:5px;padding:3px 6px;margin-top:3px}.follow-up.overdue{color:#ffaaa8;background:#45292d;border-color:#67383e;font-weight:700}.contact-cell small{white-space:nowrap}
