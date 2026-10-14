@@ -56,7 +56,10 @@ function App() {
   const [form, setForm] = useState({ company: "", website: "", contact: "", email: "", phone: "", location: "Москва и Московская область", nextAction: "", followUpDate: "", industry: "Строительство", status: "Новый" as Prospect["status"], source: "Сайт компании", notes: "", tags: "", activityType: "Звонок", activityNote: "" });
   const viewportRef = useRef<HTMLDivElement>(null);
   const activeTabRef = useRef<string | null>(activeTab);
+  const historyRef = useRef<HistoryItem[]>(history);
+  const historySaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   activeTabRef.current = activeTab;
+  historyRef.current = history;
   const active = tabs.find(tab => tab.id === activeTab) ?? null;
 
   const notify = (message: string) => {
@@ -69,7 +72,12 @@ function App() {
       if (Array.isArray(items)) setProspects(items as Prospect[]);
     }).catch(() => notify("Не удалось загрузить локальную базу"));
     void window.nexus.listBookmarks().then(items => { if (Array.isArray(items)) setBookmarks(items as BookmarkItem[]); }).catch(() => undefined);
-    void window.nexus.listHistory().then(items => { if (Array.isArray(items)) setHistory(items as HistoryItem[]); }).catch(() => undefined);
+    void window.nexus.listHistory().then(items => {
+      if (Array.isArray(items)) {
+        historyRef.current = items as HistoryItem[];
+        setHistory(items as HistoryItem[]);
+      }
+    }).catch(() => notify("Не удалось загрузить историю посещений"));
     void window.nexus.listEstimates().then(items => { if (Array.isArray(items)) setEstimates(items as Estimate[]); }).catch(() => notify("Не удалось загрузить сметы"));
     void window.nexus.listDocuments().then(items => { if (Array.isArray(items)) setDocuments(items as BusinessDocument[]); }).catch(() => notify("Не удалось загрузить документы"));
     void window.nexus.listObjects().then(items => { if (Array.isArray(items)) setObjects(items as ProjectObject[]); }).catch(() => notify("Не удалось загрузить объекты"));
@@ -79,10 +87,18 @@ function App() {
     const offTitle = window.nexus.onTitle(({ id, title }) => setTabs(prev => prev.map(t => t.id === id ? { ...t, title: title || shortHost(t.url) } : t)));
     const offNavigate = window.nexus.onNavigate(({ id, url }) => {
       setTabs(prev => prev.map(t => t.id === id ? { ...t, url, title: shortHost(url) } : t));
-      setHistory(prev => {
-        const next: HistoryItem[] = [{ id: makeId(), title: shortHost(url), url, visitedAt: new Date().toISOString() }, ...prev.filter(item => item.url !== url)].slice(0, 500);
-        void window.nexus.saveHistory(next);
-        return next;
+      historySaveQueueRef.current = historySaveQueueRef.current.then(async () => {
+        const previous = historyRef.current;
+        const next: HistoryItem[] = [{ id: makeId(), title: shortHost(url), url, visitedAt: new Date().toISOString() }, ...previous.filter(item => item.url !== url)].slice(0, 500);
+        try {
+          await window.nexus.saveHistory(next);
+          historyRef.current = next;
+          setHistory(next);
+        } catch {
+          notify("Не удалось сохранить историю посещений");
+        }
+      }).catch(() => {
+        notify("Не удалось сохранить историю посещений");
       });
     });
     const offError = window.nexus.onError(({ id, description }) => {
@@ -147,6 +163,7 @@ function App() {
       ]);
       setProspects(nextProspects as Prospect[]);
       setBookmarks(nextBookmarks as BookmarkItem[]);
+      historyRef.current = nextHistory as HistoryItem[];
       setHistory(nextHistory as HistoryItem[]);
       setEstimates(nextEstimates as Estimate[]);
       setDocuments(nextDocuments as BusinessDocument[]);
@@ -319,22 +336,36 @@ function App() {
     if (!active) { notify("Откройте сайт, чтобы добавить его в закладки"); return; }
     if (bookmarks.some(item => item.url === active.url)) { notify("Этот сайт уже в закладках"); return; }
     const next = [{ id: makeId(), title: active.title || shortHost(active.url), url: active.url, createdAt: new Date().toISOString() }, ...bookmarks];
-    setBookmarks(next);
-    await window.nexus.saveBookmarks(next);
-    notify("Сайт добавлен в закладки");
+    try {
+      await window.nexus.saveBookmarks(next);
+      setBookmarks(next);
+      notify("Сайт добавлен в закладки");
+    } catch {
+      notify("Не удалось сохранить закладку. Изменения не применены.");
+    }
   };
 
   const removeBookmark = async (id: string) => {
     const next = bookmarks.filter(item => item.id !== id);
-    setBookmarks(next);
-    await window.nexus.saveBookmarks(next);
+    try {
+      await window.nexus.saveBookmarks(next);
+      setBookmarks(next);
+      notify("Закладка удалена");
+    } catch {
+      notify("Не удалось удалить закладку. Изменения не применены.");
+    }
   };
 
   const clearHistory = async () => {
     if (!confirm("Очистить историю посещений?")) return;
-    setHistory([]);
-    await window.nexus.saveHistory([]);
-    notify("История очищена");
+    try {
+      await window.nexus.saveHistory([]);
+      historyRef.current = [];
+      setHistory([]);
+      notify("История очищена");
+    } catch {
+      notify("Не удалось очистить историю. Данные не изменены.");
+    }
   };
 
   const resetForm = () => setForm({ company: "", website: "", contact: "", email: "", phone: "", location: "Москва и Московская область", nextAction: "", followUpDate: "", industry: "Строительство", status: "Новый", source: "Сайт компании", notes: "", tags: "", activityType: "Звонок", activityNote: "" });
