@@ -25,7 +25,7 @@ export function validateProspect(value: unknown): JsonRecord {
   const id = requireString(item.id, "id", 200).trim();
   const company = requireString(item.company, "company", 500).trim();
   if (!id || !company) throw new Error("У компании должны быть id и название");
-  for (const field of ["website", "contact", "email", "phone", "industry", "status", "source", "notes", "createdAt"]) {
+  for (const field of ["website", "contact", "email", "phone", "location", "nextAction", "followUpDate", "industry", "status", "source", "notes", "createdAt"]) {
     if (item[field] !== undefined) requireString(item[field], field);
   }
   return { ...item, id, company };
