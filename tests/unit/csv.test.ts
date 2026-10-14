@@ -8,11 +8,23 @@ describe("prospect CSV import", () => {
     expect(rows[0].company).toBe("ООО Ромашка");
     expect(rows[0].notes).toBe("Москва; коммерция");
   });
+
   it("accepts English headers and commas inside quoted fields", () => {
     const rows = parseProspectsCsv('Company,Website,Notes\n"Acme, Inc.",https://acme.test,"First, second"');
     expect(rows[0].company).toBe("Acme, Inc.");
     expect(rows[0].notes).toBe("First, second");
   });
+
+  it("preserves line breaks inside quoted fields and escaped quotes", () => {
+    const rows = parseProspectsCsv('Company,Notes\nAcme,"First line\nSecond ""quoted"" line"');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].notes).toBe('First line\nSecond "quoted" line');
+  });
+
+  it("rejects malformed unclosed quoted fields", () => {
+    expect(() => parseProspectsCsv('Company,Notes\nAcme,"unfinished')).toThrow(/незакрытое поле/);
+  });
+
   it("rejects files without a company column", () => {
     expect(() => parseProspectsCsv("Website;Email\nhttps://example.ru;a@b.com")).toThrow();
   });
