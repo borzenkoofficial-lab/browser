@@ -105,6 +105,7 @@ function createSchema(database: Database.Database): void {
 }
 
 function saveRows(database: Database.Database, kind: DataKind, records: StoredRecord[]): void {
+  if (records.length === 0) return;
   const table = kind;
   const validator = kind === "prospects" ? validateProspect : kind === "bookmarks" ? validateBookmark : validateHistoryItem;
   const rows = records.map(record => {
