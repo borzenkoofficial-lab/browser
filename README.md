@@ -36,7 +36,7 @@ npm run build
 npm run dist:win
 ```
 
-The Windows installer is generated under `release/`. The GitHub Actions workflow is configured to publish it as a workflow artifact after a successful Windows build.
+The Windows installer is generated under `release/`. The GitHub Actions workflow is configured to publish it as a workflow artifact after a successful Windows build. SQLite is provided by the portable `sql.js` WASM build, so no native Node/Electron module rebuild is required.
 
 ## Local data
 
