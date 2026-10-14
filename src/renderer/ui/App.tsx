@@ -10,7 +10,7 @@ import {
 
 type Prospect = {
   id: string; company: string; website: string; contact: string; email: string;
-  phone: string; industry: string; status: "Новый" | "В работе" | "Приоритет" | "Не подходит";
+  phone: string; location: string; nextAction: string; followUpDate: string; industry: string; status: "Новый" | "В работе" | "Приоритет" | "Не подходит";
   source: string; notes: string; createdAt: string;
 };
 type Tab = { id: string; title: string; url: string };
@@ -39,7 +39,7 @@ function App() {
   const [toast, setToast] = useState("");
   const [sidebarCompact, setSidebarCompact] = useState(false);
   const [storageBusy, setStorageBusy] = useState(false);
-  const [form, setForm] = useState({ company: "", website: "", contact: "", email: "", phone: "", industry: "Строительство", status: "Новый" as Prospect["status"], source: "Сайт компании", notes: "" });
+  const [form, setForm] = useState({ company: "", website: "", contact: "", email: "", phone: "", location: "Москва и Московская область", nextAction: "", followUpDate: "", industry: "Строительство", status: "Новый" as Prospect["status"], source: "Сайт компании", notes: "" });
   const viewportRef = useRef<HTMLDivElement>(null);
   const active = tabs.find(tab => tab.id === activeTab) ?? null;
 
@@ -240,7 +240,7 @@ function App() {
     notify("История очищена");
   };
 
-  const resetForm = () => setForm({ company: "", website: "", contact: "", email: "", phone: "", industry: "Строительство", status: "Новый", source: "Сайт компании", notes: "" });
+  const resetForm = () => setForm({ company: "", website: "", contact: "", email: "", phone: "", location: "Москва и Московская область", nextAction: "", followUpDate: "", industry: "Строительство", status: "Новый", source: "Сайт компании", notes: "" });
 
   const saveForm = async () => {
     if (!form.company.trim()) { notify("Укажите название компании"); return; }
@@ -256,14 +256,14 @@ function App() {
 
   const editProspect = (item: Prospect) => {
     setEditing(item);
-    setForm({ company: item.company, website: item.website, contact: item.contact, email: item.email, phone: item.phone, industry: item.industry, status: item.status, source: item.source, notes: item.notes });
+    setForm({ company: item.company, website: item.website, contact: item.contact, email: item.email, phone: item.phone, location: item.location || "", nextAction: item.nextAction || "", followUpDate: item.followUpDate || "", industry: item.industry, status: item.status, source: item.source, notes: item.notes });
     setShowAdd(true);
   };
 
   const exportCsv = () => {
-    const headers = ["Компания", "Сайт", "Контакт", "Email", "Телефон", "Отрасль", "Статус", "Источник", "Заметки", "Дата добавления"];
+    const headers = ["Компания", "Сайт", "Контакт", "Email", "Телефон", "Регион", "Следующий шаг", "Дата контакта", "Отрасль", "Статус", "Источник", "Заметки", "Дата добавления"];
     const quote = (v: unknown) => '"' + String(v ?? "").replace(/"/g, '""') + '"';
-    const lines = [headers, ...filtered.map(p => [p.company, p.website, p.contact, p.email, p.phone, p.industry, p.status, p.source, p.notes, p.createdAt])].map(row => row.map(quote).join(";"));
+    const lines = [headers, ...filtered.map(p => [p.company, p.website, p.contact, p.email, p.phone, p.location, p.nextAction, p.followUpDate, p.industry, p.status, p.source, p.notes, p.createdAt])].map(row => row.map(quote).join(";"));
     const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = "nexus-prospects.csv"; a.click(); URL.revokeObjectURL(url);
@@ -290,7 +290,7 @@ function App() {
 
   const filtered = useMemo(() => prospects.filter(p => {
     const q = prospectQuery.toLowerCase().trim();
-    const matches = !q || [p.company, p.website, p.contact, p.email, p.phone, p.industry, p.notes].some(v => (v || "").toLowerCase().includes(q));
+    const matches = !q || [p.company, p.website, p.contact, p.email, p.phone, p.location, p.nextAction, p.industry, p.notes].some(v => (v || "").toLowerCase().includes(q));
     return matches && (statusFilter === "Все статусы" || p.status === statusFilter);
   }), [prospects, prospectQuery, statusFilter]);
 
@@ -392,6 +392,9 @@ function App() {
           <label className="field"><span>Отрасль</span><select value={form.industry} onChange={e => setForm(p => ({ ...p, industry: e.target.value }))}><option>Строительство</option><option>Недвижимость</option><option>Управление объектами</option><option>Ремонт и отделка</option><option>Производство</option><option>Торговля</option><option>Услуги</option><option>Другое</option></select></label>
           <label className="field"><span>Email</span><input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="name@company.ru"/></label>
           <label className="field"><span>Телефон</span><input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} placeholder="+7…"/></label>
+          <label className="field"><span>Регион / город</span><input value={form.location} onChange={e => setForm(p => ({ ...p, location: e.target.value }))} placeholder="Москва, Московская область"/></label>
+          <label className="field"><span>Следующий шаг</span><input value={form.nextAction} onChange={e => setForm(p => ({ ...p, nextAction: e.target.value }))} placeholder="Позвонить, отправить КП…"/></label>
+          <label className="field"><span>Дата следующего контакта</span><input type="date" value={form.followUpDate} onChange={e => setForm(p => ({ ...p, followUpDate: e.target.value }))}/></label>
           <label className="field"><span>Статус</span><select value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value as Prospect["status"] }))}><option>Новый</option><option>В работе</option><option>Приоритет</option><option>Не подходит</option></select></label>
           <label className="field full"><span>Источник информации</span><input value={form.source} onChange={e => setForm(p => ({ ...p, source: e.target.value }))} placeholder="Сайт, каталог, рекомендация…"/></label>
           <label className="field full"><span>Заметки</span><textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={3} placeholder="Чем занимается компания, потенциальная потребность…"/></label>
@@ -468,7 +471,7 @@ function ProspectsPage({ prospects, query, setQuery, statusFilter, setStatusFilt
   return <div className="standard-page"><PageHeader eyebrow="УПРАВЛЕНИЕ ПРОДАЖАМИ" title="База компаний" description="Единый список потенциальных клиентов, контактов и источников." action={<button className="button button-primary" onClick={onAdd}><Plus size={16}/> Добавить компанию</button>}/>
     <div className="table-toolbar"><div className="table-search"><Search size={16}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Поиск по компании, сайту, контакту…"/></div><div className="table-filters"><Filter size={15}/><select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option>Все статусы</option><option>Новый</option><option>В работе</option><option>Приоритет</option><option>Не подходит</option></select><label className="button button-secondary import-button"><ArrowDownToLine size={15}/> Импорт CSV<input type="file" accept=".csv,text/csv" onChange={e => { const file = e.target.files?.[0]; if (file) onImport(file); e.currentTarget.value = ""; }}/></label><button className="button button-secondary" onClick={onExport}><Download size={15}/> Экспорт CSV</button></div></div>
     <div className="panel table-panel"><div className="table-count"><span>Компании <b>{prospects.length}</b></span><span>Локальная база <span className="status-light"/></span></div>
-      {prospects.length === 0 ? <div className="empty-state"><div className="empty-icon"><Users size={24}/></div><h3>Пока нет компаний</h3><p>Добавьте первую компанию вручную или сохраните её с открытого сайта. Записи будут доступны после перезапуска.</p><button className="button button-primary" onClick={onAdd}><Plus size={16}/> Добавить первую компанию</button></div> : <div className="table-scroll"><table><thead><tr><th>Компания</th><th>Отрасль</th><th>Контактные данные</th><th>Источник</th><th>Статус</th><th></th></tr></thead><tbody>{prospects.map(p => <tr key={p.id}><td><div className="table-company"><div className="company-monogram">{p.company.slice(0,1).toUpperCase()}</div><div><b>{p.company}</b>{p.website && <a href="#" onClick={e => { e.preventDefault(); onOpen(p.website); }}>{shortHost(p.website)}</a>}</div></div></td><td>{p.industry || "—"}</td><td><div className="contact-cell">{p.contact && <span>{p.contact}</span>}{p.email && <span>{p.email}</span>}{p.phone && <span>{p.phone}</span>}{!p.contact && !p.email && !p.phone && "—"}</div></td><td>{p.source || "—"}</td><td><StatusBadge status={p.status}/></td><td><div className="row-actions"><button className="icon-button" title="Редактировать" onClick={() => onEdit(p)}><Settings2 size={15}/></button><button className="icon-button danger-hover" title="Удалить" onClick={() => onDelete(p.id)}><Trash2 size={15}/></button></div></td></tr>)}</tbody></table></div>}
+      {prospects.length === 0 ? <div className="empty-state"><div className="empty-icon"><Users size={24}/></div><h3>Пока нет компаний</h3><p>Добавьте первую компанию вручную или сохраните её с открытого сайта. Записи будут доступны после перезапуска.</p><button className="button button-primary" onClick={onAdd}><Plus size={16}/> Добавить первую компанию</button></div> : <div className="table-scroll"><table><thead><tr><th>Компания</th><th>Регион</th><th>Отрасль</th><th>Контактные данные</th><th>Следующий шаг</th><th>Источник</th><th>Статус</th><th></th></tr></thead><tbody>{prospects.map(p => <tr key={p.id}><td><div className="table-company"><div className="company-monogram">{p.company.slice(0,1).toUpperCase()}</div><div><b>{p.company}</b>{p.website && <a href="#" onClick={e => { e.preventDefault(); onOpen(p.website); }}>{shortHost(p.website)}</a>}</div></div></td><td>{p.location || "—"}</td><td>{p.industry || "—"}</td><td><div className="contact-cell">{p.contact && <span>{p.contact}</span>}{p.email && <span>{p.email}</span>}{p.phone && <span>{p.phone}</span>}{!p.contact && !p.email && !p.phone && "—"}</div></td><td><div className="contact-cell">{p.nextAction && <span>{p.nextAction}</span>}{p.followUpDate && <small className={p.followUpDate < new Date().toISOString().slice(0, 10) ? "follow-up overdue" : "follow-up"}>{p.followUpDate}</small>}{!p.nextAction && !p.followUpDate && "—"}</div></td><td>{p.source || "—"}</td><td><StatusBadge status={p.status}/></td><td><div className="row-actions"><button className="icon-button" title="Редактировать" onClick={() => onEdit(p)}><Settings2 size={15}/></button><button className="icon-button danger-hover" title="Удалить" onClick={() => onDelete(p.id)}><Trash2 size={15}/></button></div></td></tr>)}</tbody></table></div>}
     </div>
   </div>;
 }
