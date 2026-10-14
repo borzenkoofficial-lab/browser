@@ -98,3 +98,30 @@ export function validateDocument(value: unknown): JsonRecord {
   }
   return { ...estimate, ...item };
 }
+
+export function validateObject(value: unknown): JsonRecord {
+  const item = requireRecord(value, "Объект");
+  const id = requireString(item.id, "id", 200).trim();
+  const name = requireString(item.name, "name", 500).trim();
+  if (!id || !name) throw new Error("У объекта должны быть id и название");
+  for (const field of ["customer", "address", "status", "startDate", "endDate", "estimateId", "notes", "createdAt", "updatedAt"]) {
+    if (item[field] !== undefined) requireString(item[field], field, 5000);
+  }
+  const plannedRevenue = item.plannedRevenue ?? 0;
+  if (typeof plannedRevenue !== "number" || !Number.isFinite(plannedRevenue) || plannedRevenue < 0 || plannedRevenue > 1_000_000_000_000) {
+    throw new Error("Некорректное поле: plannedRevenue");
+  }
+  if (!Array.isArray(item.shifts) || item.shifts.length > 1000) throw new Error("В объекте должно быть не более 1000 сменных отчётов");
+  item.shifts.forEach((entry, index) => {
+    const shift = requireRecord(entry, `shifts[${index}]`);
+    for (const field of ["id", "date", "notes"]) requireString(shift[field], `shifts[${index}].${field}`, 5000);
+    for (const field of ["workers", "hours", "quantity", "revenue", "cost"]) {
+      const number = shift[field];
+      if (typeof number !== "number" || !Number.isFinite(number) || number < 0 || number > 1_000_000_000) {
+        throw new Error(`Некорректное поле: shifts[${index}].${field}`);
+      }
+    }
+    if (shift.workers > 10000 || shift.hours > 24 * 31) throw new Error("Некорректная продолжительность смены или число работников");
+  });
+  return { ...item, id, name, plannedRevenue };
+}
