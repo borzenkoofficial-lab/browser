@@ -82,6 +82,30 @@ describe("SQLite repository storage", () => {
     expect(listRecords("prospects")).toMatchObject([{ id: "p1", company: "Сохранённая компания" }]);
   });
 
+  it("stores estimate records and preserves them in a verified backup", async () => {
+    await setup();
+    const estimate = {
+      id: "e1", title: "Демонтаж офиса", customer: "ООО Заказчик", object: "Москва",
+      status: "Черновик", notes: "", createdAt: "2026-10-14T10:00:00.000Z", updatedAt: "2026-10-14T10:00:00.000Z",
+      items: [{ id: "line1", name: "Снятие стяжки", unit: "м²", quantity: 100, price: 450, cost: 280 }]
+    };
+    replaceRecords("estimates", [estimate]);
+    expect(listRecords("estimates")).toEqual([estimate]);
+    const backupPath = path.join(tempDir, "backups", "estimates.sqlite");
+    expect((await createBackup(backupPath)).integrity).toBe("ok");
+    replaceRecords("estimates", []);
+    await restoreBackup(backupPath);
+    expect(listRecords("estimates")).toEqual([estimate]);
+  });
+
+  it("rejects estimates with negative quantity or invalid costs", async () => {
+    await setup();
+    expect(() => replaceRecords("estimates", [{
+      id: "e2", title: "Некорректная смета", items: [{ id: "l1", name: "Работа", unit: "м²", quantity: -1, price: 100, cost: 50 }]
+    }])).toThrow(/quantity/);
+    expect(listRecords("estimates")).toEqual([]);
+  });
+
   it("creates and restores a verified backup", async () => {
     await setup();
     replaceRecords("prospects", [{ id: "p1", company: "Исходная компания" }]);
