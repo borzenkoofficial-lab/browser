@@ -273,7 +273,7 @@ export function listRecords(kind: DataKind): StoredRecord[] {
 
 export function replaceRecords(kind: DataKind, input: unknown): boolean {
   const records = requireArray(input, kind);
-  const validator = kind === "prospects" ? validateProspect : kind === "bookmarks" ? validateBookmark : validateHistoryItem;
+  const validator = kind === "prospects" ? validateProspect : kind === "bookmarks" ? validateBookmark : kind === "history" ? validateHistoryItem : validateEstimate;
   const validated = records.map(validator);
   const database = db();
   const SQL = sqlModule;
