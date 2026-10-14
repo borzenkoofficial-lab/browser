@@ -4,14 +4,14 @@ import fs from "node:fs/promises";
 import * as fsSync from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
-import { validateBookmark, validateDocument, validateEstimate, validateHistoryItem, validateProspect, requireArray } from "./validation";
+import { validateBookmark, validateDocument, validateEstimate, validateHistoryItem, validateObject, validateProspect, requireArray } from "./validation";
 
 export type StoredRecord = Record<string, unknown>;
-type DataKind = "prospects" | "bookmarks" | "history" | "estimates" | "documents";
-type LegacyDataKind = Exclude<DataKind, "estimates" | "documents">;
+type DataKind = "prospects" | "bookmarks" | "history" | "estimates" | "documents" | "objects";
+type LegacyDataKind = Exclude<DataKind, "estimates" | "documents" | "objects">;
 type SqlValue = string | number | null | Uint8Array;
 
-const MIGRATION_VERSION = 3;
+const MIGRATION_VERSION = 4;
 const requireFromProject = createRequire(path.join(process.cwd(), "package.json"));
 let connection: SqlDatabase | null = null;
 let sqlModule: SqlJsStatic | null = null;
@@ -81,7 +81,7 @@ function readLegacyRecords(filePath: string, kind: DataKind): StoredRecord[] {
     throw new Error(`Не удалось прочитать старые данные: ${path.basename(filePath)}. Исходный файл сохранён; миграция остановлена.`);
   }
   const records = requireArray(parsed, path.basename(filePath));
-  const validator = kind === "prospects" ? validateProspect : kind === "bookmarks" ? validateBookmark : kind === "history" ? validateHistoryItem : kind === "estimates" ? validateEstimate : validateDocument;
+  const validator = kind === "prospects" ? validateProspect : kind === "bookmarks" ? validateBookmark : kind === "history" ? validateHistoryItem : kind === "estimates" ? validateEstimate : kind === "documents" ? validateDocument : validateObject;
   return records.map(validator);
 }
 
@@ -159,13 +159,20 @@ function createSchema(database: SqlDatabase): void {
       payload_json TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_documents_created_at ON documents(created_at);
+    CREATE TABLE IF NOT EXISTS objects (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT '',
+      payload_json TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_objects_created_at ON objects(created_at);
   `);
   run(database, "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)", [MIGRATION_VERSION, new Date().toISOString()]);
 }
 
 function saveRows(database: SqlDatabase, kind: DataKind, records: StoredRecord[]): void {
   if (records.length === 0) return;
-  const validator = kind === "prospects" ? validateProspect : kind === "bookmarks" ? validateBookmark : kind === "history" ? validateHistoryItem : kind === "estimates" ? validateEstimate : validateDocument;
+  const validator = kind === "prospects" ? validateProspect : kind === "bookmarks" ? validateBookmark : kind === "history" ? validateHistoryItem : kind === "estimates" ? validateEstimate : kind === "documents" ? validateDocument : validateObject;
   const rows = records.map(record => {
     const item = validator(record);
     if (kind === "prospects") return {
@@ -182,6 +189,7 @@ function saveRows(database: SqlDatabase, kind: DataKind, records: StoredRecord[]
       id: item.id, title: item.title, url: item.url, visited_at: item.visitedAt ?? "",
       payload_json: JSON.stringify(item)
     };
+    if (kind === "objects") return { id: item.id, title: item.name, created_at: item.createdAt ?? "", payload_json: JSON.stringify(item) };
     return { id: item.id, title: item.title, created_at: item.createdAt ?? "", payload_json: JSON.stringify(item) };
   });
   const columns = kind === "prospects"
@@ -230,14 +238,14 @@ function validateBackupDatabase(database: SqlDatabase): void {
   const versionRows = queryRows(database, "SELECT MAX(version) AS version FROM schema_migrations");
   const version = Number(versionRows[0]?.version ?? 0);
   if (!version || version > MIGRATION_VERSION) throw new Error("Версия резервной копии несовместима с этой версией приложения");
-  for (const table of ["prospects", "bookmarks", "history", "estimates", "documents"]) {
+  for (const table of ["prospects", "bookmarks", "history", "estimates", "documents", "objects"]) {
     const found = queryRows(database, "SELECT name FROM sqlite_master WHERE type='table' AND name=?", [table]);
     if (!found.length) {
-      if (table === "estimates" || table === "documents") continue;
+      if (table === "estimates" || table === "documents" || table === "objects") continue;
       throw new Error("В резервной копии отсутствуют необходимые таблицы");
     }
     const payloads = queryRows(database, `SELECT payload_json FROM ${table}`);
-    const validator = table === "prospects" ? validateProspect : table === "bookmarks" ? validateBookmark : table === "history" ? validateHistoryItem : table === "estimates" ? validateEstimate : validateDocument;
+    const validator = table === "prospects" ? validateProspect : table === "bookmarks" ? validateBookmark : table === "history" ? validateHistoryItem : table === "estimates" ? validateEstimate : table === "documents" ? validateDocument : validateObject;
     for (const row of payloads) {
       let parsed: unknown;
       try { parsed = JSON.parse(String(row.payload_json)); }
@@ -280,7 +288,7 @@ export function listRecords(kind: DataKind): StoredRecord[] {
 
 export function replaceRecords(kind: DataKind, input: unknown): boolean {
   const records = requireArray(input, kind);
-  const validator = kind === "prospects" ? validateProspect : kind === "bookmarks" ? validateBookmark : kind === "history" ? validateHistoryItem : kind === "estimates" ? validateEstimate : validateDocument;
+  const validator = kind === "prospects" ? validateProspect : kind === "bookmarks" ? validateBookmark : kind === "history" ? validateHistoryItem : kind === "estimates" ? validateEstimate : kind === "documents" ? validateDocument : validateObject;
   const validated = records.map(validator);
   const database = db();
   const SQL = sqlModule;
