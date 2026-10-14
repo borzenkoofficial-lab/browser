@@ -135,6 +135,70 @@ These supplement the 40-tool baseline and do not replace it.
 - Real Windows testing explicitly tracked separately from CI. Never claim Windows testing from Linux CI.
 - Installer workflow is intentionally not run until the user asks for an installer.
 
+## First-pass audit of the 40 tools (repository snapshot: 2026-10-14)
+
+**Method and limits:** static review of `src/renderer/ui/App.tsx`, `src/electron/main.ts`, `src/electron/preload.ts`, `src/electron/storage/database.ts`, `src/electron/storage/validation.ts`, the unit tests and README. This is a code-scope audit, not a manual run of the Windows application. “Partial” means some relevant data/UI exists but one or more explicit requirements are missing; it does not mean production-ready.
+
+| # | Tool from v1.0 | Status | Evidence and gap |
+|---:|---|---|---|
+| 1 | Client search center | **Partial** | `App.tsx`: `Research`, search intent presets, query preview/repeat; CSV import and browser-based site saving exist. No built-in crawler or verified results catalogue; searches open external search engines. |
+| 2 | Lead qualification | **Partial** | `App.tsx`: company form includes status, priority-related dashboard ordering, industry, tags, notes, next action and follow-up date. No full sales pipeline stages, assignment or structured qualification score. |
+| 3 | Tender search | **Partial** | Tender/procurement is a search intent preset. No tender register with amount, deadline, requirements, source verification and reminder workflow. |
+| 4 | Contact center | **Partial** | Contact fields, extracted email/phone candidates, activity note and follow-up date exist. No call/email history timeline or integrated message sending/templates workflow. |
+| 5 | Company dossier | **Partial** | Prospect record, website extraction and unverified contact candidates exist. No structured projects/public-details/source history or source freshness tracking. |
+| 6 | Construction calculator | **Partial** | `EstimatesPage` supports line items, units, quantity, price and cost. No maintained work-rate catalogue or complexity-factor library is evident. |
+| 7 | Cost and margin | **Partial** | Estimate lines store price and cost and calculate economics. Separate structured labor/material/equipment/transport/waste/overhead breakdown and explicit tax/VAT settings are not present as a complete model. |
+| 8 | Estimates and commercial proposals | **Partial** | `EstimatesPage` and `DocumentsPage` support saved estimates, proposal fields, templates/styles and print flow. Version history and an immutable issued-document snapshot are not evident; only three styles are represented in the current type. |
+| 9 | Productivity forecast | **Partial** | Object shift reports store workers, hours, quantity, revenue and cost; productivity can be reviewed from recorded shifts. Forecasting with norms, assumptions, site factors and uncertainty is not implemented as a distinct tool. |
+| 10 | Supplier comparison | **Partial** | Supplier records store contact, payment terms, delivery days and rating. No comparable quote table or total-cost calculation across suppliers. |
+| 11 | Contract generator | **Partial** | Generic business document editor includes customer/supplier/object, terms and templates. No dedicated contract clauses, appendices, staged payment builder or contract-specific validation. |
+| 12 | Acts | **Missing** | No dedicated act document type/workflow linked to object, estimate, period, quantities and signatures was found. |
+| 13 | Invoices and payments | **Partial** | Finance has planned/paid income and expense entries. No invoice generator with advance/staged-payment/balance details and payment reconciliation. |
+| 14 | Archive | **Partial** | Documents are saved locally and listed. Searchable categories, revisions/version history and a complete company/object document archive are not evident. |
+| 15 | Document recognition | **Missing** | No OCR/document extraction or manual-review workflow was found. |
+| 16 | Object passport | **Partial** | `ObjectsPage` stores name, customer, address, status, dates, estimate link and planned financial fields. Contract/responsible-person linkage is not complete. |
+| 17 | Crew management | **Missing** | Shift reports capture a worker count, but there is no worker/crew directory with rates, skills, availability and history. |
+| 18 | Planner | **Partial** | Object dates and follow-up dates exist. No stage dependencies, owners, task calendar or object schedule planner was found. |
+| 19 | Photo reports | **Missing** | No object-linked photo upload/report and export workflow was found. |
+| 20 | Plan/fact | **Partial** | Object and shift fields include planned and actual-like quantity/revenue/cost data. A complete variance analysis for schedule, quantity, cost and profit is not evident. |
+| 21 | Cash flow | **Partial** | Finance entries distinguish “План” and “Оплачено” and include type/date/amount/object. A projected running balance and period-based cash-flow forecast are not evident as a complete feature. |
+| 22 | Accounts receivable | **Partial** | Customer/counterparty, dates and operation status can be recorded. No dedicated debt aging, due-date follow-up and reminder history. |
+| 23 | Profit by object | **Partial** | Finance entries link to objects and objects have planned revenue/cost. No complete reconciled object profit report combining all revenue, costs and obligations. |
+| 24 | Obligations calendar | **Missing** | No unified calendar for payroll, rent, taxes and contractual payments was found. |
+| 25 | Budget and scenarios | **Missing** | No base/stress scenario builder or budget comparison was found. |
+| 26 | Subcontractor database | **Partial** | Supplier directory stores category, contacts, region, terms, delivery time, rating and status. Dedicated subcontractor specialties, documents and work history are absent. |
+| 27 | Worker/crew search | **Missing** | No worker database, skills/rates/availability search or applications workflow. |
+| 28 | Equipment rental | **Partial** | Generic supplier records can hold equipment vendors and delivery terms, but equipment type/rate/minimum shift/idle-time comparisons are not modelled. |
+| 29 | Waste removal | **Missing** | No dedicated waste-removal volume/container/trip/document workflow linked to an estimate. |
+| 30 | Inventory/tools | **Missing** | No stock, issue, return, write-off or responsible-person movement register. |
+| 31 | Counterparty checks | **Missing** | No integrated counterparty verification dossier with sourced public records was found. |
+| 32 | Contract analysis | **Missing** | No contract clause extraction/risk review workflow was found. |
+| 33 | Construction requirements | **Missing** | No sourced regulation/edition/scope lookup module was found. |
+| 34 | Work safety | **Missing** | No safety checklist, briefing, PPE or observation register was found. |
+| 35 | Handover documentation checklist | **Missing** | No prepared/missing/review-required executive-documentation checklist was found. |
+| 36 | AI assistant | **Missing** | README and settings UI explicitly describe AI provider integration as not implemented; no provider/runtime integration was found. |
+| 37 | Tender analysis | **Missing** | Search presets can form procurement queries, but there is no analysis of tender files, deadlines, requirements, quantities or risks. |
+| 38 | Automation | **Missing** | No trigger/condition/action scheduler or execution log was found. |
+| 39 | Global search | **Partial** | Client-list search and browser history are available separately. No single cross-module search across clients, objects, documents, estimates, notes and history. |
+| 40 | Business analytics | **Partial** | Dashboard shows lead priorities/follow-ups and module-level records exist. No unified conversion, workload, margin and expense analytics across the business. |
+
+### Audit summary
+
+- **Implemented as specified:** 0/40 tools at the full acceptance-criteria level.
+- **Partial foundation exists:** 21/40.
+- **Missing as dedicated workflows:** 19/40.
+- These counts intentionally do not equate a generic field or screen with a completed business tool. Several partial modules are useful foundations, but do not yet meet the original v1.0 completion gates.
+- Storage already has versioned SQLite schema/migrations, validated record types and backup integrity/restore tests: `database.ts`, `validation.ts`, `tests/unit/database.test.ts`. Existing data kinds include prospects, bookmarks, history, estimates, documents, objects, finance and suppliers. The current shared model still lacks first-class contacts, tasks, tender records, crews, inventory movements, obligations and source-verification records.
+- CI run `38632712612` for the merged master-roadmap commit completed successfully. This verifies the configured CI checks only; it does **not** verify manual Windows behavior or all 40 tool workflows.
+
+### Priority order after audit
+
+1. **Close Leads workflow:** company/source record → contact candidates with verification state → qualification/status → next action/task → follow-up dashboard. Add explicit source URL/captured date and prevent duplicate companies across CSV/manual/site capture.
+2. **Shared model before expansion:** first-class tasks, contact/activity records, source provenance, document type/version and object relationships; migrations must preserve current user data.
+3. **Finish estimates/proposals:** rate catalogue, transparent cost components, explicit margin vs markup, forecast assumptions, proposal version snapshot and PDF export acceptance tests.
+4. **Build dedicated document and production flows:** contracts/acts/invoices, object stages, crew directory, shift attachments/photo reports and plan/fact.
+5. **Then finance, supply/risk and AI:** obligations/debt aging/scenarios; equipment/waste/inventory; sourced checks and contract analysis; AI only after provider security, consent and external-action confirmation are designed.
+
 ## Current implementation status (confirmed from repository history)
 
 | Feature | Status |
@@ -144,7 +208,7 @@ These supplement the 40-tool baseline and do not replace it.
 | Recent business search history | Merged into main; CI success |
 | Website-based prospect deduplication | Merged into main; CI success |
 | Extract/preserve contact candidates | PR #27 merged after correcting a syntax error; latest test-and-build CI passed; installer skipped |
-| Remaining 40-tool baseline | Requires a systematic repository audit before assigning complete/partial/missing statuses |
+| 40-tool baseline audit | First-pass static audit added below; no tool meets all v1.0 acceptance criteria yet |
 | Manual Windows validation | Not confirmed |
 | Commercial installer | Not built by request |
 
@@ -162,7 +226,8 @@ Before each major implementation batch:
 
 ## Immediate next steps
 
-1. Run a baseline audit of the current repository against all 40 tools and stages; mark each as implemented, partial, missing or blocked with code/test evidence.
-2. Finish the Leads/Workspace module as one coherent workflow: source search → candidate extraction → deduplication → company record → qualification → next task/follow-up.
-3. Define the shared data model and persistence/migration strategy before adding modules that duplicate records.
-4. Proceed to estimates and commercial proposals, then documents, production, finance, supply/risk and AI/automation.
+1. Validate and close the first-pass audit by mapping each partial/missing tool to explicit acceptance tests; repeat the audit after each module.
+2. Finish the Leads/Workspace workflow: source search → candidate extraction → deduplication → company record → qualification → next task/follow-up.
+3. Add first-class task, activity/contact and source-provenance models with safe migrations before expanding other modules.
+4. Finish estimates/proposal versioning, then dedicated documents and production workflows.
+5. Continue with finance, supply/risk, then AI/automation only after security and confirmation boundaries are designed.
