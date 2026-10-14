@@ -22,7 +22,8 @@ type Estimate = { id: string; title: string; customer: string; object: string; s
 type BusinessDocument = { id: string; number: string; title: string; template: "premium" | "classic" | "minimal"; customer: string; supplier: string; object: string; date: string; validUntil: string; terms: string; notes: string; status: "Черновик" | "Подготовлен" | "Отправлен" | "Согласован"; items: EstimateLine[]; estimateId: string; createdAt: string; updatedAt: string };
 type ShiftReport = { id: string; date: string; workers: number; hours: number; quantity: number; revenue: number; cost: number; notes: string };
 type ProjectObject = { id: string; name: string; customer: string; address: string; status: "Подготовка" | "В работе" | "Приостановлен" | "Завершён"; startDate: string; endDate: string; estimateId: string; plannedRevenue: number; notes: string; shifts: ShiftReport[]; createdAt: string; updatedAt: string };
-type Section = "home" | "prospects" | "research" | "saved" | "history" | "settings" | "estimates" | "documents" | "objects";
+type FinanceEntry = { id: string; type: "Доход" | "Расход"; title: string; category: string; amount: number; date: string; status: "План" | "Оплачено"; counterparty: string; objectId: string; notes: string; createdAt: string; updatedAt: string };
+type Section = "home" | "prospects" | "research" | "saved" | "history" | "settings" | "estimates" | "documents" | "objects" | "finance";
 
 const starterProspects: Prospect[] = [];
 const makeId = () => crypto.randomUUID();
@@ -41,6 +42,7 @@ function App() {
   const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [documents, setDocuments] = useState<BusinessDocument[]>([]);
   const [objects, setObjects] = useState<ProjectObject[]>([]);
+  const [finance, setFinance] = useState<FinanceEntry[]>([]);
   const [prospectQuery, setProspectQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Все статусы");
   const [showAdd, setShowAdd] = useState(false);
@@ -67,6 +69,7 @@ function App() {
     void window.nexus.listEstimates().then(items => { if (Array.isArray(items)) setEstimates(items as Estimate[]); }).catch(() => notify("Не удалось загрузить сметы"));
     void window.nexus.listDocuments().then(items => { if (Array.isArray(items)) setDocuments(items as BusinessDocument[]); }).catch(() => notify("Не удалось загрузить документы"));
     void window.nexus.listObjects().then(items => { if (Array.isArray(items)) setObjects(items as ProjectObject[]); }).catch(() => notify("Не удалось загрузить объекты"));
+    void window.nexus.listFinance().then(items => { if (Array.isArray(items)) setFinance(items as FinanceEntry[]); }).catch(() => notify("Не удалось загрузить финансовые операции"));
     void window.nexus.getVersion().then(setVersion).catch(() => undefined);
     const offTitle = window.nexus.onTitle(({ id, title }) => setTabs(prev => prev.map(t => t.id === id ? { ...t, title: title || shortHost(t.url) } : t)));
     const offNavigate = window.nexus.onNavigate(({ id, url }) => {
@@ -129,13 +132,13 @@ function App() {
   };
 
   const restoreBackup = async () => {
-    if (!confirm("Восстановление заменит текущие компании, закладки, историю, сметы, документы и объекты данными из выбранной копии. Перед заменой будет создана страховочная копия. Продолжить?")) return;
+    if (!confirm("Восстановление заменит текущие компании, закладки, историю, сметы, документы, объекты и финансы данными из выбранной копии. Перед заменой будет создана страховочная копия. Продолжить?")) return;
     setStorageBusy(true);
     try {
       const result = await window.nexus.restoreBackup();
       if (result.cancelled) return;
-      const [nextProspects, nextBookmarks, nextHistory, nextEstimates, nextDocuments, nextObjects] = await Promise.all([
-        window.nexus.listProspects(), window.nexus.listBookmarks(), window.nexus.listHistory(), window.nexus.listEstimates(), window.nexus.listDocuments(), window.nexus.listObjects()
+      const [nextProspects, nextBookmarks, nextHistory, nextEstimates, nextDocuments, nextObjects, nextFinance] = await Promise.all([
+        window.nexus.listProspects(), window.nexus.listBookmarks(), window.nexus.listHistory(), window.nexus.listEstimates(), window.nexus.listDocuments(), window.nexus.listObjects(), window.nexus.listFinance()
       ]);
       setProspects(nextProspects as Prospect[]);
       setBookmarks(nextBookmarks as BookmarkItem[]);
@@ -143,6 +146,7 @@ function App() {
       setEstimates(nextEstimates as Estimate[]);
       setDocuments(nextDocuments as BusinessDocument[]);
       setObjects(nextObjects as ProjectObject[]);
+      setFinance(nextFinance as FinanceEntry[]);
       notify("Данные восстановлены; страховочная копия создана");
     } catch (error) {
       notify(error instanceof Error ? error.message : "Не удалось восстановить резервную копию");
@@ -173,6 +177,12 @@ function App() {
     setObjects(next);
     try { await window.nexus.saveObjects(next); }
     catch { notify("Не удалось сохранить объекты"); }
+  };
+
+  const persistFinance = async (next: FinanceEntry[]) => {
+    setFinance(next);
+    try { await window.nexus.saveFinance(next); }
+    catch { notify("Не удалось сохранить финансовые операции"); }
   };
 
   const openTab = async (url = "https://www.google.com") => {
@@ -367,6 +377,7 @@ function App() {
         <NavItem icon={<Calculator size={18}/>} label="Сметы и прибыль" active={section === "estimates"} count={estimates.length || undefined} compact={sidebarCompact} onClick={() => goSection("estimates")} />
         <NavItem icon={<FileText size={18}/>} label="Документы и КП" active={section === "documents"} count={documents.length || undefined} compact={sidebarCompact} onClick={() => goSection("documents")} />
         <NavItem icon={<ClipboardList size={18}/>} label="Объекты и смены" active={section === "objects"} count={objects.length || undefined} compact={sidebarCompact} onClick={() => goSection("objects")} />
+        <NavItem icon={<Activity size={18}/>} label="Финансы" active={section === "finance"} count={finance.length || undefined} compact={sidebarCompact} onClick={() => goSection("finance")} />
         <NavItem icon={<Bookmark size={18}/>} label="Закладки и сайты" active={section === "saved"} compact={sidebarCompact} onClick={() => goSection("saved")} />
         <NavItem icon={<HistoryIcon size={18}/>} label="История" active={section === "history"} compact={sidebarCompact} onClick={() => goSection("history")} />
       </nav>
@@ -431,7 +442,8 @@ function App() {
           {section === "settings" && <SettingsPage version={version} storageBusy={storageBusy} onBackup={() => void createBackup()} onRestore={() => void restoreBackup()}/>}
           {section === "estimates" && <EstimatesPage estimates={estimates} onSave={item => { const exists = estimates.some(e => e.id === item.id); void persistEstimates(exists ? estimates.map(e => e.id === item.id ? item : e) : [item, ...estimates]); notify("Смета сохранена локально"); }} onDelete={id => { if (confirm("Удалить эту смету?")) void persistEstimates(estimates.filter(item => item.id !== id)); }}/>}
           {section === "documents" && <DocumentsPage estimates={estimates} documents={documents} onSave={item => { const exists = documents.some(d => d.id === item.id); void persistDocuments(exists ? documents.map(d => d.id === item.id ? item : d) : [item, ...documents]); notify("Документ сохранён локально"); }} onDelete={id => { if (confirm("Удалить документ?")) void persistDocuments(documents.filter(item => item.id !== id)); }}/>}
-          {section === "objects" && <ObjectsPage objects={objects} estimates={estimates} onSave={item => { const exists = objects.some(o => o.id === item.id); void persistObjects(exists ? objects.map(o => o.id === item.id ? item : o) : [item, ...objects]); notify("Объект сохранён локально"); }} onDelete={id => { if (confirm("Удалить объект вместе с его сменными отчётами?")) void persistObjects(objects.filter(item => item.id !== id)); }}/>} 
+          {section === "objects" && <ObjectsPage objects={objects} estimates={estimates} onSave={item => { const exists = objects.some(o => o.id === item.id); void persistObjects(exists ? objects.map(o => o.id === item.id ? item : o) : [item, ...objects]); notify("Объект сохранён локально"); }} onDelete={id => { if (confirm("Удалить объект вместе с его сменными отчётами?")) void persistObjects(objects.filter(item => item.id !== id)); }}/>}
+          {section === "finance" && <FinancePage entries={finance} objects={objects} onSave={item => { const exists = finance.some(entry => entry.id === item.id); void persistFinance(exists ? finance.map(entry => entry.id === item.id ? item : entry) : [item, ...finance]); notify("Финансовая операция сохранена"); }} onDelete={id => { if (confirm("Удалить финансовую операцию?")) void persistFinance(finance.filter(item => item.id !== id)); }}/>} 
         </div>}
       </div>
       <footer className="status-bar"><span><span className="status-light"/> NEXUS работает локально</span>{pageError && <span className="error-status">{pageError}</span>}<span>Версия {version} <span className="status-separator">·</span> Данные остаются на этом устройстве</span></footer>
