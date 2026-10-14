@@ -380,7 +380,7 @@ function App() {
 
       <div className="content-region">
         {activeTab && section === "home" ? <div className="web-viewport" ref={viewportRef} /> : <div className="page-scroll">
-          {section === "home" && <Dashboard prospects={prospects} onSearch={q => { setAddress(q); void openTab("https://www.google.com/search?q=" + encodeURIComponent(q)); }} onSection={goSection} onAdd={() => { resetForm(); setEditing(null); setShowAdd(true); }} onExport={exportCsv}/>}
+          {section === "home" && <Dashboard prospects={prospects} onSearch={q => { setAddress(q); void openTab("https://www.google.com/search?q=" + encodeURIComponent(q)); }} onSection={goSection} onAdd={() => { resetForm(); setEditing(null); setShowAdd(true); }} onExport={exportCsv} onFollowUpFilter={filter => setStatusFilter(filter)}/>}
           {section === "research" && <Research onSearch={(q, source = "Веб-поиск") => { const base = source === "Яндекс" ? "https://yandex.ru/search/?text=" : source === "Bing" ? "https://www.bing.com/search?q=" : "https://www.google.com/search?q="; setAddress(base + encodeURIComponent(q)); void openTab(base + encodeURIComponent(q)); }} onSave={() => { resetForm(); setForm(p => ({ ...p, source: "Поиск клиентов" })); setShowAdd(true); }}/>}
           {section === "prospects" && <ProspectsPage prospects={filtered} query={prospectQuery} setQuery={setProspectQuery} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onAdd={() => { resetForm(); setEditing(null); setShowAdd(true); }} onEdit={editProspect} onDelete={id => { if (confirm("Удалить компанию из локальной базы?")) void persistProspects(prospects.filter(p => p.id !== id)); }} onStatusChange={(item, status) => { void persistProspects(prospects.map(p => p.id === item.id ? { ...p, status } : p)); }} onExport={exportCsv} onOpen={url => void openTab(url)} onImport={importCsv}/>}
           {section === "saved" && <SavedPage bookmarks={bookmarks} prospects={prospects} onOpen={url => void openTab(url)} onSection={goSection} onRemoveBookmark={id => void removeBookmark(id)}/>}
@@ -423,7 +423,7 @@ function PageHeader({ eyebrow, title, description, action }: { eyebrow: string; 
   return <div className="page-header"><div><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p>{description}</p></div>{action}</div>;
 }
 
-function Dashboard({ prospects, onSearch, onSection, onAdd, onExport }: { prospects: Prospect[]; onSearch: (q: string) => void; onSection: (s: Section) => void; onAdd: () => void; onExport: () => void }) {
+function Dashboard({ prospects, onSearch, onSection, onAdd, onExport, onFollowUpFilter }: { prospects: Prospect[]; onSearch: (q: string) => void; onSection: (s: Section) => void; onAdd: () => void; onExport: () => void; onFollowUpFilter: (filter: string) => void }) {
   const [query, setQuery] = useState("");
   const today = new Intl.DateTimeFormat("ru-RU", { weekday: "long", day: "numeric", month: "long" }).format(new Date());
   return <div className="dashboard-page">
@@ -436,6 +436,19 @@ function Dashboard({ prospects, onSearch, onSection, onAdd, onExport }: { prospe
       <Metric icon={<Activity size={18}/>} label="В работе" value={prospects.filter(p => p.status === "В работе").length.toString()} detail="Активные контакты" tone="green"/>
       <Metric icon={<Zap size={18}/>} label="Новые" value={prospects.filter(p => p.status === "Новый").length.toString()} detail="Ещё не обработаны" tone="amber"/>
     </div>
+    {(() => {
+      const todayKey = localDateKey();
+      const activeFollowUps = prospects.filter(p => p.followUpDate && p.status !== "Не подходит").sort((a, b) => a.followUpDate.localeCompare(b.followUpDate));
+      const overdue = activeFollowUps.filter(p => p.followUpDate < todayKey);
+      const dueToday = activeFollowUps.filter(p => p.followUpDate === todayKey);
+      const upcoming = activeFollowUps.filter(p => p.followUpDate > todayKey && p.followUpDate <= localDateKey(new Date(Date.now() + 7 * 86400000)));
+      const openFollowUps = (filter: string) => { onFollowUpFilter(filter); onSection("prospects"); };
+      return <section className="panel follow-up-panel"><div className="panel-heading"><div><h3>Контроль контактов</h3><p>Следующие действия по клиентской базе</p></div><CalendarClock size={18}/></div><div className="follow-up-summary">
+        <button className={overdue.length ? "follow-up-stat overdue-stat" : "follow-up-stat"} onClick={() => openFollowUps("Просрочен контакт")}><span>Просрочено</span><b>{overdue.length}</b><small>Нужно связаться</small></button>
+        <button className="follow-up-stat today-stat" onClick={() => openFollowUps("Контакт сегодня")}><span>На сегодня</span><b>{dueToday.length}</b><small>Запланировано</small></button>
+        <button className="follow-up-stat upcoming-stat" onClick={() => openFollowUps("Контакт в ближайшие 7 дней")}><span>7 дней</span><b>{upcoming.length}</b><small>Скоро связаться</small></button>
+      </div>{activeFollowUps.length ? <div className="follow-up-list">{activeFollowUps.slice(0, 5).map(p => <button className="follow-up-row" key={p.id} onClick={() => { onFollowUpFilter("Все статусы"); onSection("prospects"); }}><span className="company-monogram">{p.company.slice(0, 1).toUpperCase()}</span><span className="follow-up-company"><b>{p.company}</b><small>{p.nextAction || "Связаться с компанией"}</small></span><span className={p.followUpDate < todayKey ? "follow-up overdue" : p.followUpDate === todayKey ? "follow-up due-today" : "follow-up"}>{p.followUpDate}</span><ArrowRight size={14}/></button>)}</div> : <div className="follow-up-empty">Добавьте дату контакта в карточке компании — здесь появится список следующих действий.</div>}</section>;
+    })()}
     <div className="dashboard-bottom">
       <section className="panel quick-panel"><div className="panel-heading"><div><h3>Быстрые действия</h3><p>Основные инструменты под рукой</p></div><MoreHorizontal size={18}/></div>
         <button className="quick-action" onClick={() => onSection("research")}><span className="quick-icon violet"><Search size={17}/></span><span><b>Найти компании</b><small>Поиск через веб-источники</small></span><ArrowRight size={16}/></button>
