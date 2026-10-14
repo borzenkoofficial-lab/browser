@@ -155,7 +155,7 @@ ipcMain.handle("storage:restore", async () => {
 ipcMain.handle("app:version", () => app.getVersion());
 app.whenReady().then(async () => {
   try {
-    await initializeDatabase(app.getPath("userData"));
+    await initializeDatabase(app.getPath("userData"), path.join(app.getAppPath(), "node_modules", "sql.js", "dist", "sql-wasm.wasm"));
     createWindow();
   } catch (error) {
     const message = error instanceof Error ? error.message : "Не удалось открыть локальную базу";
