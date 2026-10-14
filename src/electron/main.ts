@@ -67,8 +67,17 @@ ipcMain.handle("browser:create", async (_event, id: string, initialUrl?: string)
   mainWindow.contentView.addChildView(view);
   view.setBounds(viewBounds.get(id) ?? { x: 0, y: 150, width: 900, height: 600 });
   view.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url);
+    try {
+      const parsed = new URL(url);
+      if (["http:", "https:"].includes(parsed.protocol)) void shell.openExternal(parsed.toString());
+    } catch { /* Ignore malformed external URLs. */ }
     return { action: "deny" };
+  });
+  view.webContents.on("will-navigate", (event, url) => {
+    try {
+      const protocol = new URL(url).protocol;
+      if (!["http:", "https:"].includes(protocol)) event.preventDefault();
+    } catch { event.preventDefault(); }
   });
   view.webContents.on("page-title-updated", (_e, title) => mainWindow?.webContents.send("browser:title", { id, title }));
   view.webContents.on("did-navigate", (_e, url) => mainWindow?.webContents.send("browser:navigate", { id, url }));
