@@ -63,3 +63,26 @@ export function validateHistoryItem(value: unknown): JsonRecord {
   if (item.visitedAt !== undefined) requireString(item.visitedAt, "visitedAt");
   return { ...item, id, title, url };
 }
+
+
+export function validateEstimate(value: unknown): JsonRecord {
+  const item = requireRecord(value, "Смета");
+  const id = requireString(item.id, "id", 200).trim();
+  const title = requireString(item.title, "title", 500).trim();
+  if (!id || !title) throw new Error("У сметы должны быть id и название");
+  for (const field of ["customer", "object", "status", "notes", "createdAt", "updatedAt"]) {
+    if (item[field] !== undefined) requireString(item[field], field, 5000);
+  }
+  if (!Array.isArray(item.items) || item.items.length > 200) throw new Error("В смете должно быть не более 200 позиций");
+  item.items.forEach((entry, index) => {
+    const line = requireRecord(entry, `items[${index}]`);
+    for (const field of ["id", "name", "unit"]) requireString(line[field], `items[${index}].${field}`, 500);
+    for (const field of ["quantity", "price", "cost"]) {
+      const number = line[field];
+      if (typeof number !== "number" || !Number.isFinite(number) || number < 0 || number > 1_000_000_000) {
+        throw new Error(`Некорректное поле: items[${index}].${field}`);
+      }
+    }
+  });
+  return { ...item, id, title };
+}

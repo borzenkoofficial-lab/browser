@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { parseProspectsCsv } from "../lib/csv";
 import {
   Activity, ArrowDownToLine, ArrowLeft, ArrowRight, Bell, Bookmark,
-  Building2, CalendarClock, Check, ChevronDown, CircleHelp, Command, Compass, Download, ExternalLink,
+  Building2, CalendarClock, Calculator, Check, ChevronDown, CircleHelp, Command, Compass, Download, ExternalLink,
   FileSpreadsheet, Filter, Globe2, History as HistoryIcon, LayoutDashboard, ListFilter, Menu,
   MoreHorizontal, Plus, Search, Settings2, ShieldCheck, Sparkles, Star, Target,
   Trash2, Users, WandSparkles, X, Zap
@@ -17,7 +17,9 @@ type Prospect = {
 type Tab = { id: string; title: string; url: string };
 type BookmarkItem = { id: string; title: string; url: string; createdAt: string };
 type HistoryItem = { id: string; title: string; url: string; visitedAt: string };
-type Section = "home" | "prospects" | "research" | "saved" | "history" | "settings";
+type EstimateLine = { id: string; name: string; unit: string; quantity: number; price: number; cost: number };
+type Estimate = { id: string; title: string; customer: string; object: string; status: "Черновик" | "КП подготовлено" | "Согласовано"; notes: string; items: EstimateLine[]; createdAt: string; updatedAt: string };
+type Section = "home" | "prospects" | "research" | "saved" | "history" | "settings" | "estimates";
 
 const starterProspects: Prospect[] = [];
 const makeId = () => crypto.randomUUID();
@@ -33,6 +35,7 @@ function App() {
   const [prospects, setProspects] = useState<Prospect[]>(starterProspects);
   const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [prospectQuery, setProspectQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Все статусы");
   const [showAdd, setShowAdd] = useState(false);
@@ -56,6 +59,7 @@ function App() {
     }).catch(() => notify("Не удалось загрузить локальную базу"));
     void window.nexus.listBookmarks().then(items => { if (Array.isArray(items)) setBookmarks(items as BookmarkItem[]); }).catch(() => undefined);
     void window.nexus.listHistory().then(items => { if (Array.isArray(items)) setHistory(items as HistoryItem[]); }).catch(() => undefined);
+    void window.nexus.listEstimates().then(items => { if (Array.isArray(items)) setEstimates(items as Estimate[]); }).catch(() => notify("Не удалось загрузить сметы"));
     void window.nexus.getVersion().then(setVersion).catch(() => undefined);
     const offTitle = window.nexus.onTitle(({ id, title }) => setTabs(prev => prev.map(t => t.id === id ? { ...t, title: title || shortHost(t.url) } : t)));
     const offNavigate = window.nexus.onNavigate(({ id, url }) => {
@@ -118,17 +122,18 @@ function App() {
   };
 
   const restoreBackup = async () => {
-    if (!confirm("Восстановление заменит текущие компании, закладки и историю данными из выбранной копии. Перед заменой будет создана страховочная копия. Продолжить?")) return;
+    if (!confirm("Восстановление заменит текущие компании, закладки, историю и сметы данными из выбранной копии. Перед заменой будет создана страховочная копия. Продолжить?")) return;
     setStorageBusy(true);
     try {
       const result = await window.nexus.restoreBackup();
       if (result.cancelled) return;
-      const [nextProspects, nextBookmarks, nextHistory] = await Promise.all([
-        window.nexus.listProspects(), window.nexus.listBookmarks(), window.nexus.listHistory()
+      const [nextProspects, nextBookmarks, nextHistory, nextEstimates] = await Promise.all([
+        window.nexus.listProspects(), window.nexus.listBookmarks(), window.nexus.listHistory(), window.nexus.listEstimates()
       ]);
       setProspects(nextProspects as Prospect[]);
       setBookmarks(nextBookmarks as BookmarkItem[]);
       setHistory(nextHistory as HistoryItem[]);
+      setEstimates(nextEstimates as Estimate[]);
       notify("Данные восстановлены; страховочная копия создана");
     } catch (error) {
       notify(error instanceof Error ? error.message : "Не удалось восстановить резервную копию");
@@ -141,6 +146,12 @@ function App() {
     setProspects(next);
     try { await window.nexus.saveProspects(next); }
     catch { notify("Не удалось сохранить базу"); }
+  };
+
+  const persistEstimates = async (next: Estimate[]) => {
+    setEstimates(next);
+    try { await window.nexus.saveEstimates(next); }
+    catch { notify("Не удалось сохранить сметы"); }
   };
 
   const openTab = async (url = "https://www.google.com") => {
@@ -332,6 +343,7 @@ function App() {
         <NavItem icon={<LayoutDashboard size={18}/>} label="Обзор" active={section === "home" && !activeTab} compact={sidebarCompact} onClick={() => goSection("home")} />
         <NavItem icon={<Target size={18}/>} label="Поиск клиентов" active={section === "research"} compact={sidebarCompact} onClick={() => goSection("research")} />
         <NavItem icon={<Building2 size={18}/>} label="База компаний" active={section === "prospects"} count={prospects.length || undefined} compact={sidebarCompact} onClick={() => goSection("prospects")} />
+        <NavItem icon={<Calculator size={18}/>} label="Сметы и прибыль" active={section === "estimates"} count={estimates.length || undefined} compact={sidebarCompact} onClick={() => goSection("estimates")} />
         <NavItem icon={<Bookmark size={18}/>} label="Закладки и сайты" active={section === "saved"} compact={sidebarCompact} onClick={() => goSection("saved")} />
         <NavItem icon={<HistoryIcon size={18}/>} label="История" active={section === "history"} compact={sidebarCompact} onClick={() => goSection("history")} />
       </nav>
@@ -394,6 +406,7 @@ function App() {
           {section === "saved" && <SavedPage bookmarks={bookmarks} prospects={prospects} onOpen={url => void openTab(url)} onSection={goSection} onRemoveBookmark={id => void removeBookmark(id)}/>}
           {section === "history" && <HistoryPage history={history} onOpen={url => void openTab(url)} onClear={clearHistory}/>}
           {section === "settings" && <SettingsPage version={version} storageBusy={storageBusy} onBackup={() => void createBackup()} onRestore={() => void restoreBackup()}/>}
+          {section === "estimates" && <EstimatesPage estimates={estimates} onSave={item => { const exists = estimates.some(e => e.id === item.id); void persistEstimates(exists ? estimates.map(e => e.id === item.id ? item : e) : [item, ...estimates]); notify("Смета сохранена локально"); }} onDelete={id => { if (confirm("Удалить эту смету?")) void persistEstimates(estimates.filter(item => item.id !== id)); }}/>}
         </div>}
       </div>
       <footer className="status-bar"><span><span className="status-light"/> NEXUS работает локально</span>{pageError && <span className="error-status">{pageError}</span>}<span>Версия {version} <span className="status-separator">·</span> Данные остаются на этом устройстве</span></footer>
@@ -470,6 +483,7 @@ function Dashboard({ prospects, onSearch, onSection, onAdd, onExport, onFollowUp
       <section className="panel quick-panel"><div className="panel-heading"><div><h3>Быстрые действия</h3><p>Основные инструменты под рукой</p></div><MoreHorizontal size={18}/></div>
         <button className="quick-action" onClick={() => onSection("research")}><span className="quick-icon violet"><Search size={17}/></span><span><b>Найти компании</b><small>Поиск через веб-источники</small></span><ArrowRight size={16}/></button>
         <button className="quick-action" onClick={onAdd}><span className="quick-icon blue"><Plus size={17}/></span><span><b>Добавить компанию</b><small>Создать карточку вручную</small></span><ArrowRight size={16}/></button>
+        <button className="quick-action" onClick={() => onSection("estimates")}><span className="quick-icon blue"><Calculator size={17}/></span><span><b>Рассчитать смету</b><small>Цена, затраты и прибыль по работам</small></span><ArrowRight size={16}/></button>
         <button className="quick-action" onClick={onExport}><span className="quick-icon green"><ArrowDownToLine size={17}/></span><span><b>Экспортировать базу</b><small>Выгрузить компании в CSV</small></span><ArrowRight size={16}/></button>
       </section>
       <section className="panel recent-panel"><div className="panel-heading"><div><h3>Недавно добавленные</h3><p>Последние записи вашей базы</p></div><button className="text-button" onClick={() => onSection("prospects")}>Все <ArrowRight size={14}/></button></div>
@@ -517,6 +531,72 @@ function ProspectsPage({ prospects, query, setQuery, statusFilter, setStatusFilt
     {selectedIds.length > 0 && <div className="bulk-toolbar"><div><b>Выбрано: {selectedIds.length}</b><span>Массовые действия для выделенных компаний</span></div><select aria-label="Изменить статус выбранных компаний" defaultValue="" onChange={e => { if (e.target.value) { onBulkStatus(selectedIds, e.target.value as Prospect["status"]); setSelectedIds([]); e.currentTarget.value = ""; } }}><option value="" disabled>Изменить статус…</option><option>Новый</option><option>В работе</option><option>Приоритет</option><option>Не подходит</option></select><button className="button button-secondary" onClick={() => onExportSelected(selectedIds)}><Download size={14}/> Экспорт выбранных</button><button className="button button-danger" onClick={() => { onBulkDelete(selectedIds); setSelectedIds([]); }}><Trash2 size={14}/> Удалить выбранные</button><button className="text-button" onClick={() => setSelectedIds([])}>Снять выделение</button></div>}
     <div className="panel table-panel"><div className="table-count"><span>Компании <b>{prospects.length}</b></span><span>Локальная база <span className="status-light"/></span></div>
       {prospects.length === 0 ? <div className="empty-state"><div className="empty-icon"><Users size={24}/></div><h3>Пока нет компаний</h3><p>Добавьте первую компанию вручную или сохраните её с открытого сайта. Записи будут доступны после перезапуска.</p><button className="button button-primary" onClick={onAdd}><Plus size={16}/> Добавить первую компанию</button></div> : <div className="table-scroll"><table><thead><tr><th className="select-column"><input type="checkbox" aria-label="Выбрать все видимые компании" checked={allVisibleSelected} onChange={toggleAll}/></th><th>Компания</th><th>Метки</th><th>Регион</th><th>Отрасль</th><th>Контактные данные</th><th>Следующий шаг</th><th>Источник</th><th>Статус</th><th></th></tr></thead><tbody>{prospects.map(p => <tr key={p.id}><td className="select-column"><input type="checkbox" aria-label={`Выбрать компанию ${p.company}`} checked={selectedIds.includes(p.id)} onChange={() => toggleOne(p.id)}/></td><td><div className="table-company"><div className="company-monogram">{p.company.slice(0,1).toUpperCase()}</div><div><b>{p.company}</b>{p.website && <a href="#" onClick={e => { e.preventDefault(); onOpen(p.website); }}>{shortHost(p.website)}</a>}</div></div></td><td><div className="tag-list">{(p.tags ?? []).length ? (p.tags ?? []).map(tag => <span className="tag-chip" key={tag}>{tag}</span>) : "—"}</div></td><td>{p.location || "—"}</td><td>{p.industry || "—"}</td><td><div className="contact-cell">{p.contact && <span>{p.contact}</span>}{p.email && <span>{p.email}</span>}{p.phone && <span>{p.phone}</span>}{!p.contact && !p.email && !p.phone && "—"}</div></td><td><div className="contact-cell">{p.nextAction && <span>{p.nextAction}</span>}{p.followUpDate && <small className={p.followUpDate < new Date().toISOString().slice(0, 10) ? "follow-up overdue" : "follow-up"}>{p.followUpDate}</small>}{!p.nextAction && !p.followUpDate && "—"}</div></td><td>{p.source || "—"}</td><td><select className="status-select" aria-label={`Статус компании ${p.company}`} value={p.status} onChange={e => onStatusChange(p, e.target.value as Prospect["status"])}><option>Новый</option><option>В работе</option><option>Приоритет</option><option>Не подходит</option></select></td><td><div className="row-actions"><button className="icon-button" title="Редактировать" onClick={() => onEdit(p)}><Settings2 size={15}/></button><button className="icon-button danger-hover" title="Удалить" onClick={() => onDelete(p.id)}><Trash2 size={15}/></button></div></td></tr>)}</tbody></table></div>}
+    </div>
+  </div>;
+}
+
+
+const createBlankEstimate = (): Estimate => {
+  const now = new Date().toISOString();
+  return {
+    id: makeId(), title: "Новая смета", customer: "", object: "", status: "Черновик", notes: "",
+    items: [{ id: makeId(), name: "Демонтаж стен", unit: "м²", quantity: 1, price: 0, cost: 0 }],
+    createdAt: now, updatedAt: now
+  };
+};
+
+function EstimatesPage({ estimates, onSave, onDelete }: { estimates: Estimate[]; onSave: (item: Estimate) => void; onDelete: (id: string) => void }) {
+  const [activeId, setActiveId] = useState("new");
+  const [draft, setDraft] = useState<Estimate>(() => createBlankEstimate());
+  const money = (value: number) => new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", maximumFractionDigits: 2 }).format(value);
+  useEffect(() => {
+    if (activeId === "new") return;
+    const current = estimates.find(item => item.id === activeId);
+    if (current) setDraft({ ...current, items: current.items.map(line => ({ ...line })) });
+  }, [activeId, estimates]);
+  const revenue = draft.items.reduce((sum, item) => sum + item.quantity * item.price, 0);
+  const cost = draft.items.reduce((sum, item) => sum + item.quantity * item.cost, 0);
+  const profit = revenue - cost;
+  const margin = revenue > 0 ? profit / revenue * 100 : 0;
+  const updateLine = (id: string, patch: Partial<EstimateLine>) => setDraft(previous => ({ ...previous, items: previous.items.map(item => item.id === id ? { ...item, ...patch } : item) }));
+  const save = () => {
+    if (!draft.title.trim()) { alert("Укажите название сметы"); return; }
+    if (!draft.items.length) { alert("Добавьте хотя бы одну позицию"); return; }
+    if (draft.items.some(item => !item.name.trim() || !Number.isFinite(item.quantity) || !Number.isFinite(item.price) || !Number.isFinite(item.cost) || item.quantity < 0 || item.price < 0 || item.cost < 0)) {
+      alert("Проверьте названия позиций, объёмы, цены и себестоимость.");
+      return;
+    }
+    const item = { ...draft, title: draft.title.trim(), updatedAt: new Date().toISOString() };
+    onSave(item);
+    setActiveId(item.id);
+  };
+  return <div className="standard-page estimates-page">
+    <PageHeader eyebrow="РАСЧЁТЫ И ЭКОНОМИКА" title="Сметы и прибыль" description="Рассчитывайте цену заказчику, прямые затраты и маржинальность по каждой позиции. Все расчёты сохраняются локально." action={<button className="button button-primary" onClick={() => { setDraft(createBlankEstimate()); setActiveId("new"); }}><Plus size={16}/> Новая смета</button>}/>
+    <div className="estimates-layout">
+      <aside className="panel estimates-list-panel"><div className="panel-heading"><div><h3>Сохранённые сметы</h3><p>{estimates.length} документов</p></div><Calculator size={18}/></div>
+        {estimates.length ? <div className="estimate-list">{estimates.slice().sort((a,b) => b.updatedAt.localeCompare(a.updatedAt)).map(item => <button key={item.id} className={activeId === item.id ? "estimate-list-item active" : "estimate-list-item"} onClick={() => setActiveId(item.id)}><span className="estimate-list-icon"><Calculator size={15}/></span><span className="estimate-list-copy"><b>{item.title}</b><small>{item.customer || item.object || "Без заказчика"}</small><small>{new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(item.updatedAt))}</small></span><strong>{money(item.items.reduce((sum,line) => sum + line.quantity * line.price, 0))}</strong></button>)}</div> : <div className="estimate-empty">Сохранённых смет пока нет. Создайте первую — она появится в этом списке.</div>}
+      </aside>
+      <section className="estimate-editor">
+        <div className="panel estimate-details-panel">
+          <div className="estimate-editor-top"><div><span className="eyebrow">РАБОЧИЙ ДОКУМЕНТ</span><h2>{activeId === "new" ? "Новая смета" : "Редактирование сметы"}</h2></div><select aria-label="Статус сметы" value={draft.status} onChange={e => setDraft(p => ({ ...p, status: e.target.value as Estimate["status"] }))}><option>Черновик</option><option>КП подготовлено</option><option>Согласовано</option></select></div>
+          <div className="estimate-meta-grid">
+            <label className="field"><span>Название сметы *</span><input value={draft.title} onChange={e => setDraft(p => ({ ...p, title: e.target.value }))} placeholder="Демонтаж офиса — этап 1"/></label>
+            <label className="field"><span>Заказчик</span><input value={draft.customer} onChange={e => setDraft(p => ({ ...p, customer: e.target.value }))} placeholder="Компания или контакт"/></label>
+            <label className="field"><span>Объект</span><input value={draft.object} onChange={e => setDraft(p => ({ ...p, object: e.target.value }))} placeholder="Адрес / название объекта"/></label>
+            <label className="field"><span>Комментарий</span><input value={draft.notes} onChange={e => setDraft(p => ({ ...p, notes: e.target.value }))} placeholder="Условия, вывоз, ограничения"/></label>
+          </div>
+        </div>
+        <div className="panel estimate-lines-panel"><div className="panel-heading"><div><h3>Позиции расчёта</h3><p>Цена и себестоимость задаются за единицу измерения</p></div><button className="button button-secondary" onClick={() => setDraft(p => ({ ...p, items: [...p.items, { id: makeId(), name: "", unit: "м²", quantity: 0, price: 0, cost: 0 }] }))}><Plus size={14}/> Добавить позицию</button></div>
+          <div className="estimate-lines-scroll"><table className="estimate-lines-table"><thead><tr><th>Работа / материал</th><th>Ед.</th><th>Объём</th><th>Цена за ед.</th><th>Затраты за ед.</th><th>Сумма</th><th></th></tr></thead><tbody>{draft.items.map(line => <tr key={line.id}><td><input aria-label="Название позиции" value={line.name} onChange={e => updateLine(line.id, { name: e.target.value })} placeholder="Например, снятие стяжки"/></td><td><input aria-label="Единица измерения" value={line.unit} onChange={e => updateLine(line.id, { unit: e.target.value })} placeholder="м²"/></td><td><input aria-label="Объём" type="number" min="0" step="0.01" value={line.quantity} onChange={e => updateLine(line.id, { quantity: Number(e.target.value) })}/></td><td><input aria-label="Цена за единицу" type="number" min="0" step="0.01" value={line.price} onChange={e => updateLine(line.id, { price: Number(e.target.value) })}/></td><td><input aria-label="Себестоимость за единицу" type="number" min="0" step="0.01" value={line.cost} onChange={e => updateLine(line.id, { cost: Number(e.target.value) })}/></td><td className="estimate-line-total">{money(line.quantity * line.price)}</td><td><button className="icon-button danger-hover" title="Удалить позицию" disabled={draft.items.length === 1} onClick={() => setDraft(p => ({ ...p, items: p.items.filter(item => item.id !== line.id) }))}><Trash2 size={14}/></button></td></tr>)}</tbody></table></div>
+        </div>
+        <div className="estimate-summary-grid">
+          <div className="estimate-total-card"><span>Цена заказчику</span><strong>{money(revenue)}</strong><small>Сумма всех позиций</small></div>
+          <div className="estimate-total-card"><span>Прямые затраты</span><strong>{money(cost)}</strong><small>Себестоимость работ</small></div>
+          <div className={profit < 0 ? "estimate-total-card negative" : "estimate-total-card positive"}><span>Валовая прибыль</span><strong>{money(profit)}</strong><small>Без учёта налогов и накладных расходов</small></div>
+          <div className={margin < 15 ? "estimate-total-card negative" : "estimate-total-card positive"}><span>Маржинальность</span><strong>{margin.toLocaleString("ru-RU", { maximumFractionDigits: 1 })}%</strong><small>{revenue === 0 ? "Введите цену для расчёта" : margin < 15 ? "Низкая маржа — проверьте цену и затраты" : "Расчётная маржа по прямым затратам"}</small></div>
+        </div>
+        <div className="estimate-editor-actions"><span><ShieldCheck size={14}/> Локальное сохранение · Без учёта налогов и накладных расходов</span><div>{activeId !== "new" && <button className="button button-danger" onClick={() => { onDelete(draft.id); setDraft(createBlankEstimate()); setActiveId("new"); }}><Trash2 size={14}/> Удалить</button>}<button className="button button-primary" onClick={save}><Check size={15}/> Сохранить смету</button></div></div>
+      </section>
     </div>
   </div>;
 }
