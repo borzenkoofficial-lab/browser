@@ -17,6 +17,7 @@ The current codebase is an early MVP foundation. It combines a Chromium-powered 
 - Company cards with industry, contact details, status, source, tags, notes and a timestamped interaction timeline
 - Local estimate calculator with itemized customer prices, direct costs, gross profit and margin; estimates are stored in SQLite and included in database backups
 - Commercial proposal builder with three print templates, estimate-to-proposal flow, document status, validity date, terms, signature/stamp areas, and print-to-PDF through the system print dialog; documents are stored locally and included in backups
+- Production object tracking with estimate linkage, planned budget, daily shift reports, worker-hours, output, revenue, direct costs, productivity and actual gross-profit summaries
 - Explicit user-triggered extraction of page title, meta description, visible text, email and phone candidates to prefill a company card
 - Search workflow for construction, contractors, property managers and other B2B categories
 - Search provider selection for Google, Bing and Yandex

@@ -3,7 +3,7 @@ import { parseProspectsCsv } from "../lib/csv";
 import {
   Activity, ArrowDownToLine, ArrowLeft, ArrowRight, Bell, Bookmark,
   Building2, CalendarClock, Calculator, Check, ChevronDown, CircleHelp, Command, Compass, Download, ExternalLink,
-  FileSpreadsheet, FileText, Filter, Globe2, History as HistoryIcon, LayoutDashboard, ListFilter, Menu, Printer,
+  FileSpreadsheet, FileText, Filter, Globe2, History as HistoryIcon, LayoutDashboard, ListFilter, Menu, Printer, ClipboardList,
   MoreHorizontal, Plus, Search, Settings2, ShieldCheck, Sparkles, Star, Target,
   Trash2, Users, WandSparkles, X, Zap
 } from "lucide-react";
@@ -20,7 +20,9 @@ type HistoryItem = { id: string; title: string; url: string; visitedAt: string }
 type EstimateLine = { id: string; name: string; unit: string; quantity: number; price: number; cost: number };
 type Estimate = { id: string; title: string; customer: string; object: string; status: "Черновик" | "КП подготовлено" | "Согласовано"; notes: string; items: EstimateLine[]; createdAt: string; updatedAt: string };
 type BusinessDocument = { id: string; number: string; title: string; template: "premium" | "classic" | "minimal"; customer: string; supplier: string; object: string; date: string; validUntil: string; terms: string; notes: string; status: "Черновик" | "Подготовлен" | "Отправлен" | "Согласован"; items: EstimateLine[]; estimateId: string; createdAt: string; updatedAt: string };
-type Section = "home" | "prospects" | "research" | "saved" | "history" | "settings" | "estimates" | "documents";
+type ShiftReport = { id: string; date: string; workers: number; hours: number; quantity: number; revenue: number; cost: number; notes: string };
+type ProjectObject = { id: string; name: string; customer: string; address: string; status: "Подготовка" | "В работе" | "Приостановлен" | "Завершён"; startDate: string; endDate: string; estimateId: string; plannedRevenue: number; notes: string; shifts: ShiftReport[]; createdAt: string; updatedAt: string };
+type Section = "home" | "prospects" | "research" | "saved" | "history" | "settings" | "estimates" | "documents" | "objects";
 
 const starterProspects: Prospect[] = [];
 const makeId = () => crypto.randomUUID();
@@ -38,6 +40,7 @@ function App() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [documents, setDocuments] = useState<BusinessDocument[]>([]);
+  const [objects, setObjects] = useState<ProjectObject[]>([]);
   const [prospectQuery, setProspectQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Все статусы");
   const [showAdd, setShowAdd] = useState(false);
@@ -63,6 +66,7 @@ function App() {
     void window.nexus.listHistory().then(items => { if (Array.isArray(items)) setHistory(items as HistoryItem[]); }).catch(() => undefined);
     void window.nexus.listEstimates().then(items => { if (Array.isArray(items)) setEstimates(items as Estimate[]); }).catch(() => notify("Не удалось загрузить сметы"));
     void window.nexus.listDocuments().then(items => { if (Array.isArray(items)) setDocuments(items as BusinessDocument[]); }).catch(() => notify("Не удалось загрузить документы"));
+    void window.nexus.listObjects().then(items => { if (Array.isArray(items)) setObjects(items as ProjectObject[]); }).catch(() => notify("Не удалось загрузить объекты"));
     void window.nexus.getVersion().then(setVersion).catch(() => undefined);
     const offTitle = window.nexus.onTitle(({ id, title }) => setTabs(prev => prev.map(t => t.id === id ? { ...t, title: title || shortHost(t.url) } : t)));
     const offNavigate = window.nexus.onNavigate(({ id, url }) => {
@@ -125,19 +129,20 @@ function App() {
   };
 
   const restoreBackup = async () => {
-    if (!confirm("Восстановление заменит текущие компании, закладки, историю, сметы и документы данными из выбранной копии. Перед заменой будет создана страховочная копия. Продолжить?")) return;
+    if (!confirm("Восстановление заменит текущие компании, закладки, историю, сметы, документы и объекты данными из выбранной копии. Перед заменой будет создана страховочная копия. Продолжить?")) return;
     setStorageBusy(true);
     try {
       const result = await window.nexus.restoreBackup();
       if (result.cancelled) return;
-      const [nextProspects, nextBookmarks, nextHistory, nextEstimates, nextDocuments] = await Promise.all([
-        window.nexus.listProspects(), window.nexus.listBookmarks(), window.nexus.listHistory(), window.nexus.listEstimates(), window.nexus.listDocuments()
+      const [nextProspects, nextBookmarks, nextHistory, nextEstimates, nextDocuments, nextObjects] = await Promise.all([
+        window.nexus.listProspects(), window.nexus.listBookmarks(), window.nexus.listHistory(), window.nexus.listEstimates(), window.nexus.listDocuments(), window.nexus.listObjects()
       ]);
       setProspects(nextProspects as Prospect[]);
       setBookmarks(nextBookmarks as BookmarkItem[]);
       setHistory(nextHistory as HistoryItem[]);
       setEstimates(nextEstimates as Estimate[]);
       setDocuments(nextDocuments as BusinessDocument[]);
+      setObjects(nextObjects as ProjectObject[]);
       notify("Данные восстановлены; страховочная копия создана");
     } catch (error) {
       notify(error instanceof Error ? error.message : "Не удалось восстановить резервную копию");
@@ -162,6 +167,12 @@ function App() {
     setDocuments(next);
     try { await window.nexus.saveDocuments(next); }
     catch { notify("Не удалось сохранить документы"); }
+  };
+
+  const persistObjects = async (next: ProjectObject[]) => {
+    setObjects(next);
+    try { await window.nexus.saveObjects(next); }
+    catch { notify("Не удалось сохранить объекты"); }
   };
 
   const openTab = async (url = "https://www.google.com") => {
@@ -355,6 +366,7 @@ function App() {
         <NavItem icon={<Building2 size={18}/>} label="База компаний" active={section === "prospects"} count={prospects.length || undefined} compact={sidebarCompact} onClick={() => goSection("prospects")} />
         <NavItem icon={<Calculator size={18}/>} label="Сметы и прибыль" active={section === "estimates"} count={estimates.length || undefined} compact={sidebarCompact} onClick={() => goSection("estimates")} />
         <NavItem icon={<FileText size={18}/>} label="Документы и КП" active={section === "documents"} count={documents.length || undefined} compact={sidebarCompact} onClick={() => goSection("documents")} />
+        <NavItem icon={<ClipboardList size={18}/>} label="Объекты и смены" active={section === "objects"} count={objects.length || undefined} compact={sidebarCompact} onClick={() => goSection("objects")} />
         <NavItem icon={<Bookmark size={18}/>} label="Закладки и сайты" active={section === "saved"} compact={sidebarCompact} onClick={() => goSection("saved")} />
         <NavItem icon={<HistoryIcon size={18}/>} label="История" active={section === "history"} compact={sidebarCompact} onClick={() => goSection("history")} />
       </nav>
@@ -418,7 +430,8 @@ function App() {
           {section === "history" && <HistoryPage history={history} onOpen={url => void openTab(url)} onClear={clearHistory}/>}
           {section === "settings" && <SettingsPage version={version} storageBusy={storageBusy} onBackup={() => void createBackup()} onRestore={() => void restoreBackup()}/>}
           {section === "estimates" && <EstimatesPage estimates={estimates} onSave={item => { const exists = estimates.some(e => e.id === item.id); void persistEstimates(exists ? estimates.map(e => e.id === item.id ? item : e) : [item, ...estimates]); notify("Смета сохранена локально"); }} onDelete={id => { if (confirm("Удалить эту смету?")) void persistEstimates(estimates.filter(item => item.id !== id)); }}/>}
-          {section === "documents" && <DocumentsPage estimates={estimates} documents={documents} onSave={item => { const exists = documents.some(d => d.id === item.id); void persistDocuments(exists ? documents.map(d => d.id === item.id ? item : d) : [item, ...documents]); notify("Документ сохранён локально"); }} onDelete={id => { if (confirm("Удалить документ?")) void persistDocuments(documents.filter(item => item.id !== id)); }}/>} 
+          {section === "documents" && <DocumentsPage estimates={estimates} documents={documents} onSave={item => { const exists = documents.some(d => d.id === item.id); void persistDocuments(exists ? documents.map(d => d.id === item.id ? item : d) : [item, ...documents]); notify("Документ сохранён локально"); }} onDelete={id => { if (confirm("Удалить документ?")) void persistDocuments(documents.filter(item => item.id !== id)); }}/>}
+          {section === "objects" && <ObjectsPage objects={objects} estimates={estimates} onSave={item => { const exists = objects.some(o => o.id === item.id); void persistObjects(exists ? objects.map(o => o.id === item.id ? item : o) : [item, ...objects]); notify("Объект сохранён локально"); }} onDelete={id => { if (confirm("Удалить объект вместе с его сменными отчётами?")) void persistObjects(objects.filter(item => item.id !== id)); }}/>} 
         </div>}
       </div>
       <footer className="status-bar"><span><span className="status-light"/> NEXUS работает локально</span>{pageError && <span className="error-status">{pageError}</span>}<span>Версия {version} <span className="status-separator">·</span> Данные остаются на этом устройстве</span></footer>
@@ -548,6 +561,96 @@ function ProspectsPage({ prospects, query, setQuery, statusFilter, setStatusFilt
 }
 
 
+
+
+const createBlankObject = (): ProjectObject => {
+  const now = new Date().toISOString();
+  return { id: makeId(), name: "Новый объект", customer: "", address: "", status: "Подготовка", startDate: localDateKey(), endDate: "", estimateId: "", plannedRevenue: 0, notes: "", shifts: [], createdAt: now, updatedAt: now };
+};
+
+function ObjectsPage({ objects, estimates, onSave, onDelete }: { objects: ProjectObject[]; estimates: Estimate[]; onSave: (item: ProjectObject) => void; onDelete: (id: string) => void }) {
+  const [activeId, setActiveId] = useState("new");
+  const [draft, setDraft] = useState<ProjectObject>(() => createBlankObject());
+  const [shiftDraft, setShiftDraft] = useState({ date: localDateKey(), workers: 1, hours: 8, quantity: 0, revenue: 0, cost: 0, notes: "" });
+  const money = (value: number) => new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", maximumFractionDigits: 2 }).format(value);
+  useEffect(() => {
+    if (activeId === "new") return;
+    const current = objects.find(item => item.id === activeId);
+    if (current) {
+      setDraft({ ...current, shifts: current.shifts.map(shift => ({ ...shift })) });
+      setShiftDraft({ date: localDateKey(), workers: 1, hours: 8, quantity: 0, revenue: 0, cost: 0, notes: "" });
+    }
+  }, [activeId, objects]);
+  const totalQuantity = draft.shifts.reduce((sum, shift) => sum + shift.quantity, 0);
+  const totalHours = draft.shifts.reduce((sum, shift) => sum + shift.workers * shift.hours, 0);
+  const actualRevenue = draft.shifts.reduce((sum, shift) => sum + shift.revenue, 0);
+  const actualCost = draft.shifts.reduce((sum, shift) => sum + shift.cost, 0);
+  const profit = actualRevenue - actualCost;
+  const margin = actualRevenue > 0 ? profit / actualRevenue * 100 : 0;
+  const productivity = totalHours > 0 ? totalQuantity / totalHours : 0;
+  const save = () => {
+    if (!draft.name.trim()) { alert("Укажите название объекта."); return; }
+    if (!Number.isFinite(draft.plannedRevenue) || draft.plannedRevenue < 0) { alert("Проверьте бюджет объекта."); return; }
+    onSave({ ...draft, name: draft.name.trim(), updatedAt: new Date().toISOString() });
+    setActiveId(draft.id);
+  };
+  const addShift = () => {
+    if (!shiftDraft.date || shiftDraft.workers <= 0 || shiftDraft.hours <= 0) { alert("Укажите дату смены, количество работников и часы."); return; }
+    const shift: ShiftReport = { ...shiftDraft, id: makeId(), notes: shiftDraft.notes.trim() };
+    setDraft(previous => ({ ...previous, shifts: [shift, ...previous.shifts].slice(0, 1000) }));
+    setShiftDraft({ date: localDateKey(), workers: 1, hours: 8, quantity: 0, revenue: 0, cost: 0, notes: "" });
+  };
+  const formatDate = (value: string) => {
+    const date = new Date(`${value}T12:00:00`);
+    return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short", year: "numeric" }).format(date);
+  };
+  const newObject = () => { setDraft(createBlankObject()); setActiveId("new"); setShiftDraft({ date: localDateKey(), workers: 1, hours: 8, quantity: 0, revenue: 0, cost: 0, notes: "" }); };
+  return <div className="standard-page objects-page">
+    <PageHeader eyebrow="ПРОИЗВОДСТВО И КОНТРОЛЬ" title="Объекты и смены" description="Ведите активные объекты, фиксируйте ежедневный выпуск и сравнивайте фактическую производительность, выручку и затраты." action={<button className="button button-primary" onClick={newObject}><Plus size={16}/> Новый объект</button>}/>
+    <div className="objects-layout">
+      <aside className="panel objects-list-panel"><div className="panel-heading"><div><h3>Объекты</h3><p>{objects.length} всего</p></div><ClipboardList size={18}/></div>
+        {objects.length ? <div className="object-list">{objects.slice().sort((a,b) => b.updatedAt.localeCompare(a.updatedAt)).map(item => <button key={item.id} className={activeId === item.id ? "object-list-item active" : "object-list-item"} onClick={() => setActiveId(item.id)}><span className="object-list-mark"><Building2 size={15}/></span><span><b>{item.name}</b><small>{item.customer || item.address || "Заказчик не указан"}</small><small>{item.status} · {item.shifts.length} смен</small></span></button>)}</div> : <div className="estimate-empty">Активных объектов пока нет. Создайте объект или начните с сохранённой сметы.</div>}
+      </aside>
+      <section className="object-workspace">
+        <div className="panel object-details-panel">
+          <div className="estimate-editor-top"><div><span className="eyebrow">ПРОИЗВОДСТВЕННАЯ КАРТОЧКА</span><h2>{activeId === "new" ? "Новый объект" : draft.name}</h2></div><select aria-label="Статус объекта" value={draft.status} onChange={e => setDraft(p => ({ ...p, status: e.target.value as ProjectObject["status"] }))}><option>Подготовка</option><option>В работе</option><option>Приостановлен</option><option>Завершён</option></select></div>
+          <div className="object-fields">
+            <label className="field"><span>Название объекта *</span><input value={draft.name} onChange={e => setDraft(p => ({ ...p, name: e.target.value }))} placeholder="Демонтаж офисного этажа"/></label>
+            <label className="field"><span>Заказчик</span><input value={draft.customer} onChange={e => setDraft(p => ({ ...p, customer: e.target.value }))} placeholder="Компания / контакт"/></label>
+            <label className="field"><span>Адрес объекта</span><input value={draft.address} onChange={e => setDraft(p => ({ ...p, address: e.target.value }))} placeholder="Москва, улица, дом"/></label>
+            <label className="field"><span>Смета-основание</span><select value={draft.estimateId} onChange={e => { const estimate = estimates.find(item => item.id === e.target.value); setDraft(p => ({ ...p, estimateId: e.target.value, customer: p.customer || estimate?.customer || "", name: p.name === "Новый объект" ? estimate?.title || p.name : p.name, plannedRevenue: estimate ? estimate.items.reduce((sum,line) => sum + line.quantity * line.price, 0) : p.plannedRevenue })); }}><option value="">Не привязана</option>{estimates.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
+            <label className="field"><span>Плановая выручка, ₽</span><input type="number" min="0" step="0.01" value={draft.plannedRevenue} onChange={e => setDraft(p => ({ ...p, plannedRevenue: Number(e.target.value) }))}/></label>
+            <label className="field"><span>Дата начала</span><input type="date" value={draft.startDate} onChange={e => setDraft(p => ({ ...p, startDate: e.target.value }))}/></label>
+            <label className="field"><span>Плановое завершение</span><input type="date" value={draft.endDate} onChange={e => setDraft(p => ({ ...p, endDate: e.target.value }))}/></label>
+            <label className="field"><span>Примечания</span><input value={draft.notes} onChange={e => setDraft(p => ({ ...p, notes: e.target.value }))} placeholder="Доступ, лифт, вывоз, ограничения"/></label>
+          </div>
+        </div>
+        <div className="object-metrics">
+          <div className="object-metric"><span>Выполнено</span><strong>{totalQuantity.toLocaleString("ru-RU", { maximumFractionDigits: 2 })}</strong><small>единиц по сменным отчётам</small></div>
+          <div className="object-metric"><span>Выработка</span><strong>{productivity.toLocaleString("ru-RU", { maximumFractionDigits: 2 })}</strong><small>ед. на человеко-час</small></div>
+          <div className="object-metric"><span>Фактическая выручка</span><strong>{money(actualRevenue)}</strong><small>сумма по сменам</small></div>
+          <div className={profit < 0 ? "object-metric negative" : "object-metric positive"}><span>Прибыль по отчётам</span><strong>{money(profit)}</strong><small>{actualRevenue > 0 ? `Маржа ${margin.toLocaleString("ru-RU", { maximumFractionDigits: 1 })}%` : "Введите выручку и затраты смен"}</small></div>
+        </div>
+        {draft.plannedRevenue > 0 && <div className="object-budget"><div><span>Плановая выручка</span><b>{money(draft.plannedRevenue)}</b></div><div><span>Выручка в отчётах</span><b>{money(actualRevenue)}</b></div><div><span>Отклонение от плана</span><b className={actualRevenue > draft.plannedRevenue ? "budget-over" : ""}>{money(draft.plannedRevenue - actualRevenue)}</b></div></div>}
+        <div className="panel shift-entry-panel"><div className="panel-heading"><div><h3>Сменный отчёт</h3><p>Запишите людей, часы, объём, выручку и затраты за смену</p></div><CalendarClock size={18}/></div>
+          <div className="shift-fields">
+            <label className="field"><span>Дата смены</span><input type="date" value={shiftDraft.date} onChange={e => setShiftDraft(p => ({ ...p, date: e.target.value }))}/></label>
+            <label className="field"><span>Работников</span><input type="number" min="1" max="10000" value={shiftDraft.workers} onChange={e => setShiftDraft(p => ({ ...p, workers: Number(e.target.value) }))}/></label>
+            <label className="field"><span>Часов на человека</span><input type="number" min="0.1" max="744" step="0.5" value={shiftDraft.hours} onChange={e => setShiftDraft(p => ({ ...p, hours: Number(e.target.value) }))}/></label>
+            <label className="field"><span>Объём за смену</span><input type="number" min="0" step="0.01" value={shiftDraft.quantity} onChange={e => setShiftDraft(p => ({ ...p, quantity: Number(e.target.value) }))}/></label>
+            <label className="field"><span>Выручка, ₽</span><input type="number" min="0" step="0.01" value={shiftDraft.revenue} onChange={e => setShiftDraft(p => ({ ...p, revenue: Number(e.target.value) }))}/></label>
+            <label className="field"><span>Затраты, ₽</span><input type="number" min="0" step="0.01" value={shiftDraft.cost} onChange={e => setShiftDraft(p => ({ ...p, cost: Number(e.target.value) }))}/></label>
+            <label className="field shift-notes-field"><span>Комментарий к смене</span><input value={shiftDraft.notes} onChange={e => setShiftDraft(p => ({ ...p, notes: e.target.value }))} placeholder="Условия, ручной вынос, армирование, простой…"/></label>
+            <button className="button button-secondary shift-add-button" onClick={addShift}><Plus size={14}/> Добавить смену</button>
+          </div>
+          <div className="shift-table-heading"><b>История смен</b><span>{draft.shifts.length} отчётов · {totalHours.toLocaleString("ru-RU", { maximumFractionDigits: 1 })} человеко-часов</span></div>
+          {draft.shifts.length ? <div className="shift-table-scroll"><table className="shift-table"><thead><tr><th>Дата</th><th>Люди × часы</th><th>Объём</th><th>Выработка</th><th>Выручка</th><th>Затраты</th><th>Комментарий</th><th></th></tr></thead><tbody>{draft.shifts.map(shift => <tr key={shift.id}><td>{formatDate(shift.date)}</td><td>{shift.workers} × {shift.hours}</td><td>{shift.quantity.toLocaleString("ru-RU")}</td><td>{(shift.workers * shift.hours > 0 ? shift.quantity / (shift.workers * shift.hours) : 0).toLocaleString("ru-RU", { maximumFractionDigits: 2 })}</td><td>{money(shift.revenue)}</td><td>{money(shift.cost)}</td><td>{shift.notes || "—"}</td><td><button className="icon-button danger-hover" title="Удалить смену" onClick={() => setDraft(p => ({ ...p, shifts: p.shifts.filter(item => item.id !== shift.id) }))}><X size={14}/></button></td></tr>)}</tbody></table></div> : <div className="estimate-empty">После добавления смены здесь появится история и расчёт фактической выработки.</div>}
+        </div>
+        <div className="object-actions"><span><ShieldCheck size={14}/> Объект и сменные отчёты сохраняются локально</span><div>{activeId !== "new" && <button className="button button-danger" onClick={() => { onDelete(draft.id); newObject(); }}><Trash2 size={14}/> Удалить объект</button>}<button className="button button-primary" onClick={save}><Check size={15}/> Сохранить объект</button></div></div>
+      </section>
+    </div>
+  </div>;
+}
 
 const createBlankDocument = (sequence: number): BusinessDocument => {
   const now = new Date();
