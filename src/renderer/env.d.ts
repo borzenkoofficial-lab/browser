@@ -12,6 +12,10 @@ declare global {
       getTabState(id: string): Promise<{ url: string; title: string; loading: boolean } | null>;
       listProspects(): Promise<unknown[]>;
       saveProspects(records: unknown[]): Promise<boolean>;
+      listBookmarks(): Promise<unknown[]>;
+      saveBookmarks(records: unknown[]): Promise<boolean>;
+      listHistory(): Promise<unknown[]>;
+      saveHistory(records: unknown[]): Promise<boolean>;
       getVersion(): Promise<string>;
       onTitle(callback: (data: { id: string; title: string }) => void): () => void;
       onNavigate(callback: (data: { id: string; url: string }) => void): () => void;
