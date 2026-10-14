@@ -53,6 +53,7 @@ function App() {
   const [toast, setToast] = useState("");
   const [sidebarCompact, setSidebarCompact] = useState(false);
   const [storageBusy, setStorageBusy] = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
   const [form, setForm] = useState({ company: "", website: "", contact: "", email: "", phone: "", location: "Москва и Московская область", nextAction: "", followUpDate: "", industry: "Строительство", status: "Новый" as Prospect["status"], source: "Сайт компании", notes: "", tags: "", activityType: "Звонок", activityNote: "" });
   const viewportRef = useRef<HTMLDivElement>(null);
   const activeTabRef = useRef<string | null>(activeTab);
@@ -105,6 +106,60 @@ function App() {
     });
     return () => { offTitle(); offNavigate(); offError(); };
   }, []);
+
+  useEffect(() => {
+    const sessionKey = "nexus.businessBrowser.session.v1";
+    try {
+      const raw = window.localStorage.getItem(sessionKey);
+      if (raw) {
+        const parsed: unknown = JSON.parse(raw);
+        if (parsed && typeof parsed === "object" && "tabs" in parsed && Array.isArray((parsed as { tabs: unknown }).tabs)) {
+          const saved = (parsed as { tabs: unknown[]; activeIndex?: unknown }).tabs
+            .filter((item): item is { title?: string; url: string } => {
+              if (!item || typeof item !== "object" || !("url" in item) || typeof (item as { url: unknown }).url !== "string") return false;
+              try {
+                const url = new URL((item as { url: string }).url);
+                return url.protocol === "http:" || url.protocol === "https:";
+              } catch { return false; }
+            })
+            .slice(0, 12);
+          const restored = saved.map(item => ({ id: makeId(), title: typeof item.title === "string" ? item.title : shortHost(item.url), url: item.url }));
+          if (restored.length) {
+            const rawIndex = (parsed as { activeIndex?: unknown }).activeIndex;
+            const activeIndex = typeof rawIndex === "number" && Number.isInteger(rawIndex) ? Math.min(Math.max(rawIndex, 0), restored.length - 1) : restored.length - 1;
+            setTabs(restored);
+            setActiveTab(restored[activeIndex].id);
+            setAddress(restored[activeIndex].url);
+            void Promise.all(restored.map(async tab => {
+              try {
+                await window.nexus.createTab(tab.id, tab.url);
+              } catch {
+                setTabs(previous => previous.filter(item => item.id !== tab.id));
+                notify("Не удалось восстановить одну из вкладок");
+              }
+            }));
+          }
+        }
+      }
+    } catch {
+      notify("Не удалось прочитать сохранённый сеанс браузера");
+    } finally {
+      setSessionReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!sessionReady) return;
+    try {
+      const activeIndex = tabs.findIndex(tab => tab.id === activeTab);
+      window.localStorage.setItem("nexus.businessBrowser.session.v1", JSON.stringify({
+        tabs: tabs.map(({ title, url }) => ({ title, url })),
+        activeIndex: activeIndex >= 0 ? activeIndex : Math.max(0, tabs.length - 1)
+      }));
+    } catch {
+      notify("Не удалось сохранить сеанс браузера");
+    }
+  }, [tabs, activeTab, sessionReady]);
 
   const syncBounds = useCallback(() => {
     const node = viewportRef.current;
@@ -1098,7 +1153,7 @@ function SettingsPage({ version, storageBusy, onBackup, onRestore }: {
   version: string; storageBusy: boolean; onBackup: () => void; onRestore: () => void;
 }) {
   return <div className="standard-page"><PageHeader eyebrow="ПЕРСОНАЛИЗАЦИЯ" title="Настройки" description="Параметры приложения и хранения данных."/>
-    <div className="settings-grid"><section className="panel settings-card"><div className="settings-card-icon"><ShieldCheck size={20}/></div><div><h3>Приватность и данные</h3><p>Компании, закладки и история хранятся локально в SQLite в профиле приложения. Передача данных в облако сейчас не используется.</p><span className="setting-status"><span className="status-light"/> Локальное хранение включено</span></div></section>
+    <div className="settings-grid"><section className="panel settings-card"><div className="settings-card-icon"><ShieldCheck size={20}/></div><div><h3>Приватность и данные</h3><p>Бизнес-данные хранятся локально в SQLite, а список открытых вкладок — в локальном профиле приложения. Передача данных в облако сейчас не используется.</p><span className="setting-status"><span className="status-light"/> Локальное хранение включено</span></div></section>
     <section className="panel settings-card"><div className="settings-card-icon"><Command size={20}/></div><div><h3>Версия приложения</h3><p>NEXUS Business Browser — ранняя разработка. Функции будут добавляться поэтапно.</p><span className="version-pill">Версия {version}</span></div></section>
     <section className="panel settings-card"><div className="settings-card-icon"><Sparkles size={20}/></div><div><h3>Провайдер ИИ</h3><p>Подключение ИИ для анализа страниц появится отдельным модулем. Ключи API не нужно вводить в этой версии.</p><span className="soon-label">Запланировано</span></div></section>
     <section className="panel settings-card"><div className="settings-card-icon"><Download size={20}/></div><div><h3>Резервное копирование</h3><p>Создавайте проверенную резервную копию базы SQLite или восстанавливайте данные из ранее созданной копии. Перед восстановлением приложение автоматически создаёт страховочную копию текущей базы.</p><div className="settings-actions"><button className="primary-button" disabled={storageBusy} onClick={onBackup}>{storageBusy ? "Выполняется…" : "Создать копию"}</button><button className="secondary-button" disabled={storageBusy} onClick={onRestore}>Восстановить из копии</button></div></div></section></div>
