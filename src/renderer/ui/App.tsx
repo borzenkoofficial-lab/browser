@@ -389,10 +389,11 @@ function App() {
         `Заголовок: ${pageTitle}`,
         details.headings?.length ? `Разделы страницы:\\n- ${details.headings.join("\\n- ")}` : "",
         details.formFields?.length ? `Видимые поля формы / заявки:\\n${details.formFields.map(field => `- ${field.label}: ${field.value}`).join("\\n")}` : "Видимые заполненные поля формы не найдены.",
-        details.tables?.length ? `Таблицы / данные страницы:\\n${details.tables.map(table => table.slice(0, 2500)).join("\\n\\n---\\n\\n").slice(0, 12000)}` : "",
-        details.links?.length ? `Ссылки на странице:\\n${details.links.slice(0, 50).map(link => `- ${link.text}: ${link.url}`).join("\\n")}` : ""
+        details.tables?.length ? `Таблицы / данные страницы:\n${details.tables.map(table => table.slice(0, 2500)).join("\n\n---\n\n").slice(0, 8000)}` : "",
+        details.links?.length ? `Ссылки на странице:\n${details.links.slice(0, 30).map(link => `- ${link.text}: ${link.url}`).join("\n")}` : "",
+        details.text?.trim() ? `Текст страницы для проверки:\n${details.text.trim().slice(0, 14000)}` : ""
       ].filter(Boolean);
-      pageDataNote = lines.join("\\n\\n").slice(0, 24000);
+      pageDataNote = lines.join("\n\n").slice(0, 24000);
     } catch {
       extractionFailed = true;
     }
