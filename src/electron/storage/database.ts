@@ -165,7 +165,7 @@ function createSchema(database: SqlDatabase): void {
 
 function saveRows(database: SqlDatabase, kind: DataKind, records: StoredRecord[]): void {
   if (records.length === 0) return;
-  const validator = kind === "prospects" ? validateProspect : kind === "bookmarks" ? validateBookmark : kind === "history" ? validateHistoryItem : validateEstimate;
+  const validator = kind === "prospects" ? validateProspect : kind === "bookmarks" ? validateBookmark : kind === "history" ? validateHistoryItem : kind === "estimates" ? validateEstimate : validateDocument;
   const rows = records.map(record => {
     const item = validator(record);
     if (kind === "prospects") return {
@@ -280,7 +280,7 @@ export function listRecords(kind: DataKind): StoredRecord[] {
 
 export function replaceRecords(kind: DataKind, input: unknown): boolean {
   const records = requireArray(input, kind);
-  const validator = kind === "prospects" ? validateProspect : kind === "bookmarks" ? validateBookmark : kind === "history" ? validateHistoryItem : validateEstimate;
+  const validator = kind === "prospects" ? validateProspect : kind === "bookmarks" ? validateBookmark : kind === "history" ? validateHistoryItem : kind === "estimates" ? validateEstimate : validateDocument;
   const validated = records.map(validator);
   const database = db();
   const SQL = sqlModule;
