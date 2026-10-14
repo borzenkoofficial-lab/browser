@@ -192,9 +192,15 @@ function App() {
   };
 
   const persistSuppliers = async (next: Supplier[]) => {
+    const previous = suppliers;
     setSuppliers(next);
-    try { await window.nexus.saveSuppliers(next); }
-    catch { notify("Не удалось сохранить поставщиков"); }
+    try {
+      await window.nexus.saveSuppliers(next);
+      notify("Изменения поставщиков сохранены");
+    } catch {
+      setSuppliers(previous);
+      notify("Не удалось сохранить поставщиков. Изменения отменены.");
+    }
   };
 
   const openTab = async (url = "https://www.google.com") => {
@@ -457,7 +463,7 @@ function App() {
           {section === "documents" && <DocumentsPage estimates={estimates} documents={documents} onSave={item => { const exists = documents.some(d => d.id === item.id); void persistDocuments(exists ? documents.map(d => d.id === item.id ? item : d) : [item, ...documents]); notify("Документ сохранён локально"); }} onDelete={id => { if (confirm("Удалить документ?")) void persistDocuments(documents.filter(item => item.id !== id)); }}/>}
           {section === "objects" && <ObjectsPage objects={objects} estimates={estimates} onSave={item => { const exists = objects.some(o => o.id === item.id); void persistObjects(exists ? objects.map(o => o.id === item.id ? item : o) : [item, ...objects]); notify("Объект сохранён локально"); }} onDelete={id => { if (confirm("Удалить объект вместе с его сменными отчётами?")) void persistObjects(objects.filter(item => item.id !== id)); }}/>}
           {section === "finance" && <FinancePage entries={finance} objects={objects} onSave={item => { const exists = finance.some(entry => entry.id === item.id); void persistFinance(exists ? finance.map(entry => entry.id === item.id ? item : entry) : [item, ...finance]); notify("Финансовая операция сохранена"); }} onDelete={id => { if (confirm("Удалить финансовую операцию?")) void persistFinance(finance.filter(item => item.id !== id)); }}/>} 
-          {section === "suppliers" && <SuppliersPage suppliers={suppliers} onSave={item => { const exists = suppliers.some(supplier => supplier.id === item.id); void persistSuppliers(exists ? suppliers.map(supplier => supplier.id === item.id ? item : supplier) : [item, ...suppliers]); notify("Поставщик сохранён локально"); }} onDelete={id => { if (confirm("Удалить карточку поставщика?")) void persistSuppliers(suppliers.filter(item => item.id !== id)); }}/>} 
+          {section === "suppliers" && <SuppliersPage suppliers={suppliers} onSave={item => { const exists = suppliers.some(supplier => supplier.id === item.id); void persistSuppliers(exists ? suppliers.map(supplier => supplier.id === item.id ? item : supplier) : [item, ...suppliers]); }} onDelete={id => { if (confirm("Удалить карточку поставщика?")) void persistSuppliers(suppliers.filter(item => item.id !== id)); }}/>} 
         </div>}
       </div>
       <footer className="status-bar"><span><span className="status-light"/> NEXUS работает локально</span>{pageError && <span className="error-status">{pageError}</span>}<span>Версия {version} <span className="status-separator">·</span> Данные остаются на этом устройстве</span></footer>

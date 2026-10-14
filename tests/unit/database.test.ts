@@ -176,6 +176,22 @@ describe("SQLite repository storage", () => {
     await restoreBackup(backupPath);
     expect(listRecords("suppliers")).toEqual([supplier]);
   });
+  it("keeps existing suppliers when a replacement contains invalid contact data", async () => {
+    await setup();
+    const supplier = {
+      id: "sup-safe", name: "ООО Надёжный поставщик", category: "Материалы",
+      contact: "Иван", phone: "+79990000000", email: "sales@example.ru",
+      website: "https://example.ru", region: "Москва", paymentTerms: "",
+      deliveryDays: 2, rating: 4, status: "Активен", notes: "",
+      createdAt: "2026-10-14T10:00:00.000Z", updatedAt: "2026-10-14T10:00:00.000Z"
+    };
+    replaceRecords("suppliers", [supplier]);
+    expect(() => replaceRecords("suppliers", [
+      { ...supplier, id: "sup-invalid", email: "not-an-email" }
+    ])).toThrow(/корректный email/i);
+    expect(listRecords("suppliers")).toEqual([supplier]);
+  });
+
   it("stores finance entries and restores them from a backup", async () => {
     await setup();
     const entry = {
