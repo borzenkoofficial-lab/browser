@@ -17,6 +17,8 @@ declare global {
       saveBookmarks(records: unknown[]): Promise<boolean>;
       listHistory(): Promise<unknown[]>;
       saveHistory(records: unknown[]): Promise<boolean>;
+      createBackup(): Promise<{ cancelled: boolean; path?: string; integrity?: string }>;
+      restoreBackup(): Promise<{ cancelled: boolean; restored?: boolean; safetyBackupPath?: string }>;
       getVersion(): Promise<string>;
       onTitle(callback: (data: { id: string; title: string }) => void): () => void;
       onNavigate(callback: (data: { id: string; url: string }) => void): () => void;
