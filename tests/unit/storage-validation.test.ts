@@ -15,6 +15,12 @@ describe("local storage validation", () => {
     expect(() => validateProspect({ id: "1", company: "A".repeat(501) })).toThrow(/company/);
   });
 
+  it("accepts real ISO follow-up dates and rejects invalid dates", () => {
+    expect(validateProspect({ id: "p1", company: "ООО Тест", followUpDate: "2026-10-20" })).toMatchObject({ followUpDate: "2026-10-20" });
+    expect(() => validateProspect({ id: "p1", company: "ООО Тест", followUpDate: "2026-02-30" })).toThrow(/реальной датой/);
+    expect(() => validateProspect({ id: "p1", company: "ООО Тест", followUpDate: "20.10.2026" })).toThrow(/ГГГГ-ММ-ДД/);
+  });
+
   it("rejects non-http bookmarks", () => {
     expect(() => validateBookmark({ id: "1", title: "x", url: "file:///secret" })).toThrow(/HTTP/);
   });
