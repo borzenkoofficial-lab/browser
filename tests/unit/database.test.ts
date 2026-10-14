@@ -44,6 +44,16 @@ describe("SQLite repository storage", () => {
     expect(await fs.readFile(path.join(tempDir, "backups", "pre-sqlite", "prospects.json"), "utf8")).toContain("ООО Наследие");
   });
 
+  it("does not re-import stale JSON after the SQLite data is intentionally emptied", async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "nexus-storage-test-"));
+    await fs.writeFile(path.join(tempDir, "prospects.json"), JSON.stringify([{ id: "old", company: "Старая запись" }]));
+    await initializeDatabase(tempDir);
+    replaceRecords("prospects", []);
+    closeDatabase();
+    await initializeDatabase(tempDir);
+    expect(listRecords("prospects")).toEqual([]);
+  });
+
   it("stops migration on malformed legacy JSON without changing source", async () => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "nexus-storage-test-"));
     const broken = "{ broken";
