@@ -1,0 +1,379 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Activity, ArrowDownToLine, ArrowLeft, ArrowRight, Bell, Bookmark, BriefcaseBusiness,
+  Building2, Check, ChevronDown, CircleHelp, Command, Compass, Download, ExternalLink,
+  FileSpreadsheet, Filter, Globe2, LayoutDashboard, ListFilter, LoaderCircle, Menu,
+  MoreHorizontal, Plus, Search, Settings2, ShieldCheck, Sparkles, Star, Target,
+  Trash2, Users, WandSparkles, X, Zap
+} from "lucide-react";
+
+type Prospect = {
+  id: string; company: string; website: string; contact: string; email: string;
+  phone: string; industry: string; status: "Новый" | "В работе" | "Приоритет" | "Не подходит";
+  source: string; notes: string; createdAt: string;
+};
+type Tab = { id: string; title: string; url: string };
+type Section = "home" | "prospects" | "research" | "saved" | "settings";
+
+const starterProspects: Prospect[] = [];
+const makeId = () => crypto.randomUUID();
+const shortHost = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url || "Новая вкладка"; } };
+
+function App() {
+  const [section, setSection] = useState<Section>("home");
+  const [tabs, setTabs] = useState<Tab[]>([]);
+  const [activeTab, setActiveTab] = useState<string | null>(null);
+  const [address, setAddress] = useState("");
+  const [pageError, setPageError] = useState("");
+  const [prospects, setProspects] = useState<Prospect[]>(starterProspects);
+  const [prospectQuery, setProspectQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("Все статусы");
+  const [showAdd, setShowAdd] = useState(false);
+  const [editing, setEditing] = useState<Prospect | null>(null);
+  const [version, setVersion] = useState("0.1.0");
+  const [toast, setToast] = useState("");
+  const [sidebarCompact, setSidebarCompact] = useState(false);
+  const [form, setForm] = useState({ company: "", website: "", contact: "", email: "", phone: "", industry: "Строительство", status: "Новый" as Prospect["status"], source: "Сайт компании", notes: "" });
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const active = tabs.find(tab => tab.id === activeTab) ?? null;
+
+  const notify = (message: string) => {
+    setToast(message);
+    window.setTimeout(() => setToast(""), 2600);
+  };
+
+  useEffect(() => {
+    void window.nexus.listProspects().then((items) => {
+      if (Array.isArray(items)) setProspects(items as Prospect[]);
+    }).catch(() => notify("Не удалось загрузить локальную базу"));
+    void window.nexus.getVersion().then(setVersion).catch(() => undefined);
+    const offTitle = window.nexus.onTitle(({ id, title }) => setTabs(prev => prev.map(t => t.id === id ? { ...t, title: title || shortHost(t.url) } : t)));
+    const offNavigate = window.nexus.onNavigate(({ id, url }) => setTabs(prev => prev.map(t => t.id === id ? { ...t, url, title: shortHost(url) } : t)));
+    const offError = window.nexus.onError(({ id, description }) => {
+      if (id === activeTab) setPageError(description || "Не удалось загрузить страницу");
+    });
+    return () => { offTitle(); offNavigate(); offError(); };
+  }, [activeTab]);
+
+  const syncBounds = useCallback(() => {
+    const node = viewportRef.current;
+    if (!node || !activeTab) return;
+    const rect = node.getBoundingClientRect();
+    if (rect.width < 2 || rect.height < 2) {
+      void window.nexus.setBounds(activeTab, null);
+      return;
+    }
+    void window.nexus.setBounds(activeTab, {
+      x: Math.round(rect.left), y: Math.round(rect.top),
+      width: Math.max(1, Math.round(rect.width)), height: Math.max(1, Math.round(rect.height))
+    });
+  }, [activeTab]);
+
+  useEffect(() => {
+    const node = viewportRef.current;
+    if (!node) return;
+    const observer = new ResizeObserver(syncBounds);
+    observer.observe(node);
+    window.addEventListener("resize", syncBounds);
+    const frame = requestAnimationFrame(syncBounds);
+    return () => { observer.disconnect(); window.removeEventListener("resize", syncBounds); cancelAnimationFrame(frame); };
+  }, [syncBounds, section, tabs.length]);
+
+  useEffect(() => {
+    for (const tab of tabs) {
+      if (tab.id !== activeTab) void window.nexus.setBounds(tab.id, null);
+    }
+    if (activeTab) requestAnimationFrame(syncBounds);
+  }, [activeTab, tabs, syncBounds]);
+
+  const persistProspects = async (next: Prospect[]) => {
+    setProspects(next);
+    try { await window.nexus.saveProspects(next); }
+    catch { notify("Не удалось сохранить базу"); }
+  };
+
+  const openTab = async (url = "https://www.google.com") => {
+    const id = makeId();
+    const tab: Tab = { id, title: shortHost(url), url };
+    setTabs(prev => [...prev, tab]);
+    setActiveTab(id);
+    setSection("home");
+    setAddress(url);
+    setPageError("");
+    await window.nexus.createTab(id, url);
+    requestAnimationFrame(() => {
+      const rect = viewportRef.current?.getBoundingClientRect();
+      if (rect) void window.nexus.setBounds(id, { x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) });
+    });
+  };
+
+  const closeTab = async (id: string) => {
+    await window.nexus.closeTab(id);
+    const remaining = tabs.filter(tab => tab.id !== id);
+    setTabs(remaining);
+    if (activeTab === id) {
+      const next = remaining[remaining.length - 1];
+      setActiveTab(next?.id ?? null);
+      setAddress(next?.url ?? "");
+    }
+  };
+
+  const navigate = async (value = address) => {
+    if (!value.trim()) return;
+    let id = activeTab;
+    if (!id) {
+      id = makeId();
+      setTabs(prev => [...prev, { id: id!, title: "Поиск", url: value }]);
+      setActiveTab(id);
+      await window.nexus.createTab(id, value);
+    } else {
+      await window.nexus.navigate(id, value);
+    }
+    setSection("home");
+    setPageError("");
+    setAddress(value);
+  };
+
+  const saveCurrentSite = () => {
+    if (!active) { notify("Сначала открой сайт компании"); return; }
+    let host = shortHost(active.url);
+    setForm(prev => ({ ...prev, company: prev.company || host, website: active.url, source: "Открытая вкладка" }));
+    setEditing(null);
+    setShowAdd(true);
+  };
+
+  const resetForm = () => setForm({ company: "", website: "", contact: "", email: "", phone: "", industry: "Строительство", status: "Новый", source: "Сайт компании", notes: "" });
+
+  const saveForm = async () => {
+    if (!form.company.trim()) { notify("Укажите название компании"); return; }
+    const item: Prospect = {
+      ...form, id: editing?.id ?? makeId(), company: form.company.trim(),
+      website: form.website.trim(), createdAt: editing?.createdAt ?? new Date().toISOString()
+    };
+    const next = editing ? prospects.map(p => p.id === editing.id ? item : p) : [item, ...prospects];
+    await persistProspects(next);
+    setShowAdd(false); setEditing(null); resetForm();
+    notify(editing ? "Карточка обновлена" : "Компания добавлена в базу");
+  };
+
+  const editProspect = (item: Prospect) => {
+    setEditing(item);
+    setForm({ company: item.company, website: item.website, contact: item.contact, email: item.email, phone: item.phone, industry: item.industry, status: item.status, source: item.source, notes: item.notes });
+    setShowAdd(true);
+  };
+
+  const exportCsv = () => {
+    const headers = ["Компания", "Сайт", "Контакт", "Email", "Телефон", "Отрасль", "Статус", "Источник", "Заметки", "Дата добавления"];
+    const quote = (v: unknown) => '"' + String(v ?? "").replace(/"/g, '""') + '"';
+    const lines = [headers, ...filtered.map(p => [p.company, p.website, p.contact, p.email, p.phone, p.industry, p.status, p.source, p.notes, p.createdAt])].map(row => row.map(quote).join(";"));
+    const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "nexus-prospects.csv"; a.click(); URL.revokeObjectURL(url);
+    notify("CSV-файл подготовлен");
+  };
+
+  const filtered = useMemo(() => prospects.filter(p => {
+    const q = prospectQuery.toLowerCase().trim();
+    const matches = !q || [p.company, p.website, p.contact, p.email, p.phone, p.industry, p.notes].some(v => (v || "").toLowerCase().includes(q));
+    return matches && (statusFilter === "Все статусы" || p.status === statusFilter);
+  }), [prospects, prospectQuery, statusFilter]);
+
+  const goSection = (next: Section) => {
+    if (activeTab) void window.nexus.setBounds(activeTab, null);
+    setSection(next);
+  };
+
+  return <div className="app-shell">
+    <aside className={`sidebar ${sidebarCompact ? "sidebar-compact" : ""}`}>
+      <div className="brand-row">
+        <div className="brand-mark"><Compass size={21} strokeWidth={2.4}/></div>
+        {!sidebarCompact && <div className="brand-copy"><strong>NEXUS</strong><span>BUSINESS BROWSER</span></div>}
+        <button className="icon-button sidebar-toggle" title="Свернуть меню" onClick={() => setSidebarCompact(v => !v)}><Menu size={17}/></button>
+      </div>
+      <button className="workspace-switch" onClick={() => goSection("home")}>
+        <div className="workspace-icon">B</div>
+        {!sidebarCompact && <><span><b>Рабочее пространство</b><small>Личный профиль</small></span><ChevronDown size={15}/></>}
+      </button>
+      <div className="nav-label">{!sidebarCompact && "РАБОЧАЯ ОБЛАСТЬ"}</div>
+      <nav className="main-nav">
+        <NavItem icon={<LayoutDashboard size={18}/>} label="Обзор" active={section === "home" && !activeTab} compact={sidebarCompact} onClick={() => goSection("home")} />
+        <NavItem icon={<Target size={18}/>} label="Поиск клиентов" active={section === "research"} compact={sidebarCompact} onClick={() => goSection("research")} />
+        <NavItem icon={<Building2 size={18}/>} label="База компаний" active={section === "prospects"} count={prospects.length || undefined} compact={sidebarCompact} onClick={() => goSection("prospects")} />
+        <NavItem icon={<Bookmark size={18}/>} label="Сохранённое" active={section === "saved"} compact={sidebarCompact} onClick={() => goSection("saved")} />
+      </nav>
+      <div className="nav-label nav-label-spaced">{!sidebarCompact && "ИНСТРУМЕНТЫ"}</div>
+      <nav className="main-nav">
+        <NavItem icon={<Globe2 size={18}/>} label="Браузер" active={!!activeTab} compact={sidebarCompact} onClick={() => activeTab ? goSection("home") : void openTab()} />
+        <NavItem icon={<FileSpreadsheet size={18}/>} label="Импорт и экспорт" compact={sidebarCompact} onClick={exportCsv}/>
+      </nav>
+      <div className="sidebar-spacer"/>
+      {!sidebarCompact && <div className="upgrade-card">
+        <div className="upgrade-icon"><Sparkles size={16}/></div>
+        <b>Работайте быстрее</b>
+        <p>Исследование компаний и клиентская база — в одном окне.</p>
+        <span className="soon-label">ИИ-инструменты — в планах</span>
+      </div>}
+      <nav className="main-nav bottom-nav">
+        <NavItem icon={<Settings2 size={18}/>} label="Настройки" active={section === "settings"} compact={sidebarCompact} onClick={() => goSection("settings")} />
+        <NavItem icon={<CircleHelp size={18}/>} label="Помощь" compact={sidebarCompact} onClick={() => notify("Справочный центр будет добавлен позже")} />
+      </nav>
+      <div className="profile-row">
+        <div className="avatar">N</div>
+        {!sidebarCompact && <div className="profile-copy"><b>Личный аккаунт</b><small>Локальный режим</small></div>}
+        {!sidebarCompact && <MoreHorizontal size={18} className="muted-icon"/>}
+      </div>
+    </aside>
+
+    <main className="main-shell">
+      <header className="tab-strip">
+        <div className="tab-list">
+          <button className={`home-tab ${!activeTab ? "active" : ""}`} onClick={() => { setActiveTab(null); setSection("home"); }} title="Главная"><Compass size={15}/></button>
+          {tabs.map(tab => <div key={tab.id} className={`browser-tab ${activeTab === tab.id ? "active" : ""}`} onClick={() => { setActiveTab(tab.id); setAddress(tab.url); setSection("home"); }}>
+            <Globe2 size={14}/><span>{tab.title || shortHost(tab.url)}</span>
+            <button title="Закрыть вкладку" onClick={e => { e.stopPropagation(); void closeTab(tab.id); }}><X size={13}/></button>
+          </div>)}
+          <button className="add-tab" onClick={() => void openTab()} title="Новая вкладка"><Plus size={16}/></button>
+        </div>
+        <div className="window-actions"><span className="secure-dot"/><span>Локальные данные</span><button className="icon-button" title="Уведомления" onClick={() => notify("Новых уведомлений нет")}><Bell size={16}/></button></div>
+      </header>
+
+      <div className="browser-toolbar">
+        <div className="history-controls">
+          <button className="icon-button" disabled={!activeTab} title="Назад" onClick={() => activeTab && void window.nexus.back(activeTab)}><ArrowLeft size={17}/></button>
+          <button className="icon-button" disabled={!activeTab} title="Вперёд" onClick={() => activeTab && void window.nexus.forward(activeTab)}><ArrowRight size={17}/></button>
+          <button className="icon-button" title="Обновить" onClick={() => activeTab ? void window.nexus.reload(activeTab) : goSection("home")}><Activity size={16}/></button>
+        </div>
+        <form className="address-form" onSubmit={e => { e.preventDefault(); void navigate(); }}>
+          <ShieldCheck size={15} className="address-shield"/>
+          <input value={address} onChange={e => setAddress(e.target.value)} placeholder="Введите адрес сайта или поисковый запрос…" aria-label="Адрес или поисковый запрос"/>
+          <button type="submit" title="Перейти"><ArrowRight size={16}/></button>
+        </form>
+        <button className={`toolbar-action ${activeTab ? "" : "toolbar-action-primary"}`} onClick={saveCurrentSite}><Bookmark size={15}/><span>Сохранить компанию</span></button>
+        <button className="icon-button" title="Закладки" onClick={() => goSection("saved")}><Star size={17}/></button>
+      </div>
+
+      <div className="content-region">
+        {activeTab ? <div className="web-viewport" ref={viewportRef} /> : <div className="page-scroll">
+          {section === "home" && <Dashboard prospects={prospects} onSearch={q => { setAddress(q); void openTab("https://www.google.com/search?q=" + encodeURIComponent(q)); }} onSection={goSection} onAdd={() => { resetForm(); setEditing(null); setShowAdd(true); }} onExport={exportCsv}/>}
+          {section === "research" && <Research onSearch={q => { setAddress(q); void openTab("https://www.google.com/search?q=" + encodeURIComponent(q)); }} onSave={() => { resetForm(); setForm(p => ({ ...p, source: "Поиск клиентов" })); setShowAdd(true); }}/>}
+          {section === "prospects" && <ProspectsPage prospects={filtered} query={prospectQuery} setQuery={setProspectQuery} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onAdd={() => { resetForm(); setEditing(null); setShowAdd(true); }} onEdit={editProspect} onDelete={id => { if (confirm("Удалить компанию из локальной базы?")) void persistProspects(prospects.filter(p => p.id !== id)); }} onExport={exportCsv}/>}
+          {section === "saved" && <SavedPage prospects={prospects} onOpen={url => void openTab(url)} onSection={goSection}/>}
+          {section === "settings" && <SettingsPage version={version}/>}
+        </div>}
+      </div>
+      <footer className="status-bar"><span><span className="status-light"/> NEXUS работает локально</span><span>Версия {version} <span className="status-separator">·</span> Данные остаются на этом устройстве</span></footer>
+    </main>
+
+    {showAdd && <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setShowAdd(false); }}>
+      <div className="prospect-modal">
+        <div className="modal-heading"><div><span className="eyebrow">КЛИЕНТСКАЯ БАЗА</span><h2>{editing ? "Редактировать компанию" : "Новая компания"}</h2><p>Сохраняйте только проверенные сведения и источник.</p></div><button className="icon-button" onClick={() => setShowAdd(false)}><X size={18}/></button></div>
+        <div className="form-grid">
+          <label className="field full"><span>Название компании *</span><input autoFocus value={form.company} onChange={e => setForm(p => ({ ...p, company: e.target.value }))} placeholder="Например, ООО Стройпроект"/></label>
+          <label className="field full"><span>Сайт</span><input value={form.website} onChange={e => setForm(p => ({ ...p, website: e.target.value }))} placeholder="https://company.ru"/></label>
+          <label className="field"><span>Контактное лицо</span><input value={form.contact} onChange={e => setForm(p => ({ ...p, contact: e.target.value }))} placeholder="Имя и должность"/></label>
+          <label className="field"><span>Отрасль</span><select value={form.industry} onChange={e => setForm(p => ({ ...p, industry: e.target.value }))}><option>Строительство</option><option>Недвижимость</option><option>Управление объектами</option><option>Ремонт и отделка</option><option>Производство</option><option>Торговля</option><option>Услуги</option><option>Другое</option></select></label>
+          <label className="field"><span>Email</span><input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="name@company.ru"/></label>
+          <label className="field"><span>Телефон</span><input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} placeholder="+7…"/></label>
+          <label className="field"><span>Статус</span><select value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value as Prospect["status"] }))}><option>Новый</option><option>В работе</option><option>Приоритет</option><option>Не подходит</option></select></label>
+          <label className="field full"><span>Источник информации</span><input value={form.source} onChange={e => setForm(p => ({ ...p, source: e.target.value }))} placeholder="Сайт, каталог, рекомендация…"/></label>
+          <label className="field full"><span>Заметки</span><textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={3} placeholder="Чем занимается компания, потенциальная потребность…"/></label>
+        </div>
+        <div className="modal-footer"><span className="privacy-note"><ShieldCheck size={14}/> Сохраняется локально</span><div><button className="button button-ghost" onClick={() => setShowAdd(false)}>Отмена</button><button className="button button-primary" onClick={() => void saveForm()}><Check size={16}/> Сохранить компанию</button></div></div>
+      </div>
+    </div>}
+    {toast && <div className="toast"><Check size={16}/>{toast}</div>}
+  </div>;
+}
+
+function NavItem({ icon, label, active, count, compact, onClick }: { icon: React.ReactNode; label: string; active?: boolean; count?: number; compact: boolean; onClick: () => void }) {
+  return <button className={`nav-item ${active ? "active" : ""}`} onClick={onClick} title={compact ? label : undefined}>{icon}{!compact && <><span>{label}</span>{count !== undefined && <small>{count}</small>}</>}</button>;
+}
+
+function PageHeader({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: React.ReactNode }) {
+  return <div className="page-header"><div><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p>{description}</p></div>{action}</div>;
+}
+
+function Dashboard({ prospects, onSearch, onSection, onAdd, onExport }: { prospects: Prospect[]; onSearch: (q: string) => void; onSection: (s: Section) => void; onAdd: () => void; onExport: () => void }) {
+  const [query, setQuery] = useState("");
+  const today = new Intl.DateTimeFormat("ru-RU", { weekday: "long", day: "numeric", month: "long" }).format(new Date());
+  return <div className="dashboard-page">
+    <div className="welcome-line"><div><span className="eyebrow">{today.toUpperCase()}</span><h1>Рабочее пространство<span className="title-period">.</span></h1><p>Находите компании. Собирайте данные. Развивайте продажи.</p></div><div className="welcome-orb"><div className="orb-ring ring-one"/><div className="orb-ring ring-two"/><div className="orb-core"><Compass size={32}/></div></div></div>
+    <div className="hero-search-card"><div className="hero-search-copy"><span className="hero-search-icon"><Search size={18}/></span><div><b>Кого ищем сегодня?</b><p>Введите отрасль, тип компании или поисковый запрос.</p></div></div><form className="hero-search" onSubmit={e => { e.preventDefault(); if (query.trim()) onSearch(query); }}><Search size={18}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Например: генподрядчики Москвы"/><button className="button button-primary" type="submit">Начать поиск <ArrowRight size={16}/></button></form><div className="suggestions"><span>Попробуйте:</span>{["строительные компании", "управляющие компании", "ремонтные подрядчики"].map(x => <button key={x} onClick={() => { setQuery(x); onSearch(x); }}>{x}</button>)}</div></div>
+    <div className="section-heading"><div><h2>Обзор активности</h2><p>Ваша работа с потенциальными клиентами</p></div><button className="text-button" onClick={() => onSection("prospects")}>Открыть базу <ArrowRight size={15}/></button></div>
+    <div className="metric-grid">
+      <Metric icon={<Building2 size={18}/>} label="Компаний в базе" value={prospects.length.toString()} detail="Все сохранённые записи" tone="blue"/>
+      <Metric icon={<Target size={18}/>} label="Приоритетные" value={prospects.filter(p => p.status === "Приоритет").length.toString()} detail="Требуют внимания" tone="violet"/>
+      <Metric icon={<Activity size={18}/>} label="В работе" value={prospects.filter(p => p.status === "В работе").length.toString()} detail="Активные контакты" tone="green"/>
+      <Metric icon={<Zap size={18}/>} label="Новые" value={prospects.filter(p => p.status === "Новый").length.toString()} detail="Ещё не обработаны" tone="amber"/>
+    </div>
+    <div className="dashboard-bottom">
+      <section className="panel quick-panel"><div className="panel-heading"><div><h3>Быстрые действия</h3><p>Основные инструменты под рукой</p></div><MoreHorizontal size={18}/></div>
+        <button className="quick-action" onClick={() => onSection("research")}><span className="quick-icon violet"><Search size={17}/></span><span><b>Найти компании</b><small>Поиск через веб-источники</small></span><ArrowRight size={16}/></button>
+        <button className="quick-action" onClick={onAdd}><span className="quick-icon blue"><Plus size={17}/></span><span><b>Добавить компанию</b><small>Создать карточку вручную</small></span><ArrowRight size={16}/></button>
+        <button className="quick-action" onClick={onExport}><span className="quick-icon green"><ArrowDownToLine size={17}/></span><span><b>Экспортировать базу</b><small>Выгрузить компании в CSV</small></span><ArrowRight size={16}/></button>
+      </section>
+      <section className="panel recent-panel"><div className="panel-heading"><div><h3>Недавно добавленные</h3><p>Последние записи вашей базы</p></div><button className="text-button" onClick={() => onSection("prospects")}>Все <ArrowRight size={14}/></button></div>
+        {prospects.length === 0 ? <div className="empty-state compact-empty"><div className="empty-icon"><Building2 size={21}/></div><b>База пока пустая</b><p>Сохраните первую компанию, чтобы вести историю работы.</p><button className="button button-secondary" onClick={onAdd}><Plus size={15}/> Добавить компанию</button></div> : <div className="recent-list">{prospects.slice(0, 4).map(p => <div className="recent-item" key={p.id}><div className="company-monogram">{p.company.slice(0, 1).toUpperCase()}</div><div className="recent-company"><b>{p.company}</b><small>{p.website || p.industry}</small></div><StatusBadge status={p.status}/></div>)}</div>}
+      </section>
+    </div>
+    <div className="insight-banner"><div className="insight-mark"><WandSparkles size={20}/></div><div><b>От поиска к системе продаж</b><p>Сохраняйте источник каждой компании и фиксируйте следующий шаг — так база превращается в рабочий инструмент.</p></div><button onClick={() => onSection("prospects")}>Открыть базу <ArrowRight size={15}/></button></div>
+  </div>;
+}
+
+function Metric({ icon, label, value, detail, tone }: { icon: React.ReactNode; label: string; value: string; detail: string; tone: string }) {
+  return <div className="metric-card"><div className={`metric-icon ${tone}`}>{icon}<span className="metric-spark"/></div><span className="metric-label">{label}</span><strong>{value}</strong><small>{detail}</small></div>;
+}
+
+function Research({ onSearch, onSave }: { onSearch: (q: string) => void; onSave: () => void }) {
+  const [sector, setSector] = useState("Строительство и подрядчики");
+  const [region, setRegion] = useState("Москва и Московская область");
+  const [keywords, setKeywords] = useState("");
+  const [source, setSource] = useState("Веб-поиск");
+  const run = () => {
+    const q = [sector, region, keywords].filter(Boolean).join(" ");
+    onSearch(q);
+  };
+  return <div className="standard-page"><PageHeader eyebrow="ИССЛЕДОВАНИЕ РЫНКА" title="Поиск клиентов" description="Формируйте запросы к открытым веб-источникам и сохраняйте проверенные компании." action={<span className="local-pill"><ShieldCheck size={14}/> Без сервера</span>}/>
+    <div className="research-layout"><section className="panel research-form-panel"><div className="panel-heading"><div><h3>Параметры поиска</h3><p>Уточните профиль потенциального клиента</p></div><div className="panel-heading-icon"><ListFilter size={18}/></div></div>
+      <label className="field"><span>Отрасль / тип компании</span><select value={sector} onChange={e => setSector(e.target.value)}><option>Строительство и подрядчики</option><option>Генеральные подрядчики</option><option>Ремонтные компании</option><option>Управляющие компании недвижимости</option><option>Коммерческая недвижимость</option><option>Архитектурные бюро</option><option>Производственные компании</option><option>Другая отрасль</option></select></label>
+      <label className="field"><span>Регион</span><select value={region} onChange={e => setRegion(e.target.value)}><option>Москва и Московская область</option><option>Санкт-Петербург и область</option><option>Вся Россия</option><option>Казань</option><option>Екатеринбург</option><option>Новосибирск</option></select></label>
+      <label className="field"><span>Дополнительные ключевые слова</span><input value={keywords} onChange={e => setKeywords(e.target.value)} placeholder="Например: коммерческие объекты, тендеры"/></label>
+      <label className="field"><span>Источник поиска</span><select value={source} onChange={e => setSource(e.target.value)}><option>Веб-поиск</option><option>Google</option><option>Bing</option><option>Яндекс</option></select></label>
+      <div className="research-note"><ShieldCheck size={16}/><p>Поиск открывает выбранный веб-запрос. Автоматический обход сайтов и проверка контактов — отдельные функции следующих этапов.</p></div>
+      <button className="button button-primary full-button" onClick={run}><Search size={16}/> Найти компании <ArrowRight size={16}/></button>
+    </section>
+    <section className="research-aside"><div className="research-visual"><div className="visual-grid"/><div className="visual-target"><div/><div/><div/><Target size={34}/></div><div className="floating-chip chip-top"><span className="chip-dot"/>{source}</div><div className="floating-chip chip-bottom"><Building2 size={15}/> B2B · Компании</div></div><div className="panel workflow-panel"><h3>Как устроен процесс</h3>{[{n:"01",title:"Найдите компании",desc:"Сформируйте точный поисковый запрос"},{n:"02",title:"Проверьте источник",desc:"Откройте сайт и подтвердите сведения"},{n:"03",title:"Сохраните в базу",desc:"Добавьте компанию и следующий шаг"}].map(s => <div className="workflow-step" key={s.n}><span>{s.n}</span><div><b>{s.title}</b><small>{s.desc}</small></div></div>)}<button className="text-button" onClick={onSave}>Добавить компанию вручную <Plus size={15}/></button></div></section></div>
+  </div>;
+}
+
+function ProspectsPage({ prospects, query, setQuery, statusFilter, setStatusFilter, onAdd, onEdit, onDelete, onExport }: { prospects: Prospect[]; query: string; setQuery: (v: string) => void; statusFilter: string; setStatusFilter: (v: string) => void; onAdd: () => void; onEdit: (p: Prospect) => void; onDelete: (id: string) => void; onExport: () => void }) {
+  return <div className="standard-page"><PageHeader eyebrow="УПРАВЛЕНИЕ ПРОДАЖАМИ" title="База компаний" description="Единый список потенциальных клиентов, контактов и источников." action={<button className="button button-primary" onClick={onAdd}><Plus size={16}/> Добавить компанию</button>}/>
+    <div className="table-toolbar"><div className="table-search"><Search size={16}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Поиск по компании, сайту, контакту…"/></div><div className="table-filters"><Filter size={15}/><select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option>Все статусы</option><option>Новый</option><option>В работе</option><option>Приоритет</option><option>Не подходит</option></select><button className="button button-secondary" onClick={onExport}><Download size={15}/> Экспорт CSV</button></div></div>
+    <div className="panel table-panel"><div className="table-count"><span>Компании <b>{prospects.length}</b></span><span>Локальная база <span className="status-light"/></span></div>
+      {prospects.length === 0 ? <div className="empty-state"><div className="empty-icon"><Users size={24}/></div><h3>Пока нет компаний</h3><p>Добавьте первую компанию вручную или сохраните её с открытого сайта. Записи будут доступны после перезапуска.</p><button className="button button-primary" onClick={onAdd}><Plus size={16}/> Добавить первую компанию</button></div> : <div className="table-scroll"><table><thead><tr><th>Компания</th><th>Отрасль</th><th>Контактные данные</th><th>Источник</th><th>Статус</th><th></th></tr></thead><tbody>{prospects.map(p => <tr key={p.id}><td><div className="table-company"><div className="company-monogram">{p.company.slice(0,1).toUpperCase()}</div><div><b>{p.company}</b>{p.website && <a href="#" onClick={e => { e.preventDefault(); window.nexus.navigate("unused", p.website); }}>{shortHost(p.website)}</a>}</div></div></td><td>{p.industry || "—"}</td><td><div className="contact-cell">{p.contact && <span>{p.contact}</span>}{p.email && <span>{p.email}</span>}{p.phone && <span>{p.phone}</span>}{!p.contact && !p.email && !p.phone && "—"}</div></td><td>{p.source || "—"}</td><td><StatusBadge status={p.status}/></td><td><div className="row-actions"><button className="icon-button" title="Редактировать" onClick={() => onEdit(p)}><Settings2 size={15}/></button><button className="icon-button danger-hover" title="Удалить" onClick={() => onDelete(p.id)}><Trash2 size={15}/></button></div></td></tr>)}</tbody></table></div>}
+    </div>
+  </div>;
+}
+
+function StatusBadge({ status }: { status: Prospect["status"] }) {
+  const className = status === "Приоритет" ? "priority" : status === "В работе" ? "in-progress" : status === "Не подходит" ? "rejected" : "new";
+  return <span className={`status-badge ${className}`}><span/>{status}</span>;
+}
+
+function SavedPage({ prospects, onOpen, onSection }: { prospects: Prospect[]; onOpen: (url: string) => void; onSection: (s: Section) => void }) {
+  const saved = prospects.filter(p => p.website);
+  return <div className="standard-page"><PageHeader eyebrow="БЫСТРЫЙ ДОСТУП" title="Сохранённое" description="Сайты компаний, добавленные в вашу локальную базу."/>
+    {saved.length ? <div className="saved-grid">{saved.map(p => <button className="saved-card" key={p.id} onClick={() => onOpen(p.website)}><div className="saved-card-icon"><Globe2 size={20}/></div><b>{p.company}</b><span>{shortHost(p.website)}</span><ExternalLink size={15} className="saved-external"/></button>)}</div> : <div className="panel empty-state large-empty"><div className="empty-icon"><Bookmark size={24}/></div><h3>Здесь появятся сохранённые сайты</h3><p>Добавьте компанию с адресом сайта — она появится в этом разделе.</p><button className="button button-secondary" onClick={() => onSection("prospects")}>Открыть базу компаний <ArrowRight size={15}/></button></div>}
+  </div>;
+}
+
+function SettingsPage({ version }: { version: string }) {
+  return <div className="standard-page"><PageHeader eyebrow="ПЕРСОНАЛИЗАЦИЯ" title="Настройки" description="Параметры приложения и хранения данных."/>
+    <div className="settings-grid"><section className="panel settings-card"><div className="settings-card-icon"><ShieldCheck size={20}/></div><div><h3>Приватность и данные</h3><p>Клиентские карточки хранятся локально в профиле приложения. Передача данных в облако сейчас не используется.</p><span className="setting-status"><span className="status-light"/> Локальное хранение включено</span></div></section>
+    <section className="panel settings-card"><div className="settings-card-icon"><Command size={20}/></div><div><h3>Версия приложения</h3><p>NEXUS Business Browser — ранняя разработка. Функции будут добавляться поэтапно.</p><span className="version-pill">Версия {version}</span></div></section>
+    <section className="panel settings-card"><div className="settings-card-icon"><Sparkles size={20}/></div><div><h3>Провайдер ИИ</h3><p>Подключение ИИ для анализа страниц появится отдельным модулем. Ключи API не нужно вводить в этой версии.</p><span className="soon-label">Запланировано</span></div></section>
+    <section className="panel settings-card"><div className="settings-card-icon"><Download size={20}/></div><div><h3>Резервное копирование</h3><p>Пока доступен экспорт списка компаний в CSV. Полное резервное копирование профиля будет добавлено позже.</p><span className="soon-label">Запланировано</span></div></section></div>
+  </div>;
+}
+
+export default App;
