@@ -39,12 +39,12 @@ function parseRecords(text: string, delimiter: string): string[][] {
 function normalizeFollowUpDate(value: string, rowNumber: number): string {
   if (!value) return "";
   let iso = value;
-  const localized = value.match(/^(\\d{1,2})[./](\\d{1,2})[./](\\d{4})$/);
+  const localized = value.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/);
   if (localized) {
     const [, day, month, year] = localized;
     iso = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
   }
-  const match = iso.match(/^(\\d{4})-(\\d{2})-(\\d{2})$/);
+  const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) throw new Error(`CSV: некорректная дата контакта в строке ${rowNumber}: «${value}». Используйте ГГГГ-ММ-ДД или ДД.ММ.ГГГГ.`);
   const [, year, month, day] = match;
   const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
