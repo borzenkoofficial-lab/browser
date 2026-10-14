@@ -125,3 +125,19 @@ export function validateObject(value: unknown): JsonRecord {
   });
   return { ...item, id, name, plannedRevenue };
 }
+
+export function validateFinanceEntry(value: unknown): JsonRecord {
+  const item = requireRecord(value, "Финансовая операция");
+  const id = requireString(item.id, "id", 200).trim();
+  const title = requireString(item.title, "title", 500).trim();
+  if (!id || !title) throw new Error("У финансовой операции должны быть id и название");
+  for (const field of ["type", "category", "date", "status", "counterparty", "objectId", "notes", "createdAt", "updatedAt"]) {
+    if (item[field] !== undefined) requireString(item[field], field, 5000);
+  }
+  if (!["Доход", "Расход"].includes(String(item.type))) throw new Error("Тип операции должен быть «Доход» или «Расход»");
+  if (!["План", "Оплачено"].includes(String(item.status))) throw new Error("Неизвестный статус финансовой операции");
+  if (typeof item.amount !== "number" || !Number.isFinite(item.amount) || item.amount < 0 || item.amount > 1_000_000_000_000) {
+    throw new Error("Сумма операции должна быть неотрицательным числом");
+  }
+  return { ...item, id, title };
+}
