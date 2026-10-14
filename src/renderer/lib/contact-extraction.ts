@@ -24,5 +24,5 @@ export function formatContactCandidatesNote(emails: string[], phones: string[]):
   const lines = ["Кандидаты контактов со страницы — не проверены, уточните перед использованием:"];
   if (emails.length) lines.push(`Email: ${emails.join(", ")}`);
   if (phones.length) lines.push(`Телефоны: ${phones.join(", ")}`);
-  return lines.join("\\n");
+  return lines.join("\n");
 }
