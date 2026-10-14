@@ -11,6 +11,10 @@ contextBridge.exposeInMainWorld("nexus", {
   getTabState: (id: string) => ipcRenderer.invoke("browser:state", id),
   listProspects: () => ipcRenderer.invoke("prospects:list"),
   saveProspects: (records: unknown[]) => ipcRenderer.invoke("prospects:save", records),
+  listBookmarks: () => ipcRenderer.invoke("bookmarks:list"),
+  saveBookmarks: (records: unknown[]) => ipcRenderer.invoke("bookmarks:save", records),
+  listHistory: () => ipcRenderer.invoke("history:list"),
+  saveHistory: (records: unknown[]) => ipcRenderer.invoke("history:save", records),
   getVersion: () => ipcRenderer.invoke("app:version"),
   onTitle: (callback: (data: { id: string; title: string }) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: { id: string; title: string }) => callback(data);
