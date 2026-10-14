@@ -3,7 +3,7 @@ import { parseProspectsCsv } from "../lib/csv";
 import {
   Activity, ArrowDownToLine, ArrowLeft, ArrowRight, Bell, Bookmark,
   Building2, CalendarClock, Calculator, Check, ChevronDown, CircleHelp, Command, Compass, Download, ExternalLink,
-  FileSpreadsheet, Filter, Globe2, History as HistoryIcon, LayoutDashboard, ListFilter, Menu,
+  FileSpreadsheet, FileText, Filter, Globe2, History as HistoryIcon, LayoutDashboard, ListFilter, Menu, Printer,
   MoreHorizontal, Plus, Search, Settings2, ShieldCheck, Sparkles, Star, Target,
   Trash2, Users, WandSparkles, X, Zap
 } from "lucide-react";
@@ -19,7 +19,8 @@ type BookmarkItem = { id: string; title: string; url: string; createdAt: string 
 type HistoryItem = { id: string; title: string; url: string; visitedAt: string };
 type EstimateLine = { id: string; name: string; unit: string; quantity: number; price: number; cost: number };
 type Estimate = { id: string; title: string; customer: string; object: string; status: "Черновик" | "КП подготовлено" | "Согласовано"; notes: string; items: EstimateLine[]; createdAt: string; updatedAt: string };
-type Section = "home" | "prospects" | "research" | "saved" | "history" | "settings" | "estimates";
+type BusinessDocument = { id: string; number: string; title: string; template: "premium" | "classic" | "minimal"; customer: string; supplier: string; object: string; date: string; validUntil: string; terms: string; notes: string; status: "Черновик" | "Подготовлен" | "Отправлен" | "Согласован"; items: EstimateLine[]; estimateId: string; createdAt: string; updatedAt: string };
+type Section = "home" | "prospects" | "research" | "saved" | "history" | "settings" | "estimates" | "documents";
 
 const starterProspects: Prospect[] = [];
 const makeId = () => crypto.randomUUID();
@@ -36,6 +37,7 @@ function App() {
   const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [estimates, setEstimates] = useState<Estimate[]>([]);
+  const [documents, setDocuments] = useState<BusinessDocument[]>([]);
   const [prospectQuery, setProspectQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Все статусы");
   const [showAdd, setShowAdd] = useState(false);
@@ -60,6 +62,7 @@ function App() {
     void window.nexus.listBookmarks().then(items => { if (Array.isArray(items)) setBookmarks(items as BookmarkItem[]); }).catch(() => undefined);
     void window.nexus.listHistory().then(items => { if (Array.isArray(items)) setHistory(items as HistoryItem[]); }).catch(() => undefined);
     void window.nexus.listEstimates().then(items => { if (Array.isArray(items)) setEstimates(items as Estimate[]); }).catch(() => notify("Не удалось загрузить сметы"));
+    void window.nexus.listDocuments().then(items => { if (Array.isArray(items)) setDocuments(items as BusinessDocument[]); }).catch(() => notify("Не удалось загрузить документы"));
     void window.nexus.getVersion().then(setVersion).catch(() => undefined);
     const offTitle = window.nexus.onTitle(({ id, title }) => setTabs(prev => prev.map(t => t.id === id ? { ...t, title: title || shortHost(t.url) } : t)));
     const offNavigate = window.nexus.onNavigate(({ id, url }) => {
@@ -122,18 +125,19 @@ function App() {
   };
 
   const restoreBackup = async () => {
-    if (!confirm("Восстановление заменит текущие компании, закладки, историю и сметы данными из выбранной копии. Перед заменой будет создана страховочная копия. Продолжить?")) return;
+    if (!confirm("Восстановление заменит текущие компании, закладки, историю, сметы и документы данными из выбранной копии. Перед заменой будет создана страховочная копия. Продолжить?")) return;
     setStorageBusy(true);
     try {
       const result = await window.nexus.restoreBackup();
       if (result.cancelled) return;
-      const [nextProspects, nextBookmarks, nextHistory, nextEstimates] = await Promise.all([
-        window.nexus.listProspects(), window.nexus.listBookmarks(), window.nexus.listHistory(), window.nexus.listEstimates()
+      const [nextProspects, nextBookmarks, nextHistory, nextEstimates, nextDocuments] = await Promise.all([
+        window.nexus.listProspects(), window.nexus.listBookmarks(), window.nexus.listHistory(), window.nexus.listEstimates(), window.nexus.listDocuments()
       ]);
       setProspects(nextProspects as Prospect[]);
       setBookmarks(nextBookmarks as BookmarkItem[]);
       setHistory(nextHistory as HistoryItem[]);
       setEstimates(nextEstimates as Estimate[]);
+      setDocuments(nextDocuments as BusinessDocument[]);
       notify("Данные восстановлены; страховочная копия создана");
     } catch (error) {
       notify(error instanceof Error ? error.message : "Не удалось восстановить резервную копию");
@@ -152,6 +156,12 @@ function App() {
     setEstimates(next);
     try { await window.nexus.saveEstimates(next); }
     catch { notify("Не удалось сохранить сметы"); }
+  };
+
+  const persistDocuments = async (next: BusinessDocument[]) => {
+    setDocuments(next);
+    try { await window.nexus.saveDocuments(next); }
+    catch { notify("Не удалось сохранить документы"); }
   };
 
   const openTab = async (url = "https://www.google.com") => {
@@ -344,6 +354,7 @@ function App() {
         <NavItem icon={<Target size={18}/>} label="Поиск клиентов" active={section === "research"} compact={sidebarCompact} onClick={() => goSection("research")} />
         <NavItem icon={<Building2 size={18}/>} label="База компаний" active={section === "prospects"} count={prospects.length || undefined} compact={sidebarCompact} onClick={() => goSection("prospects")} />
         <NavItem icon={<Calculator size={18}/>} label="Сметы и прибыль" active={section === "estimates"} count={estimates.length || undefined} compact={sidebarCompact} onClick={() => goSection("estimates")} />
+        <NavItem icon={<FileText size={18}/>} label="Документы и КП" active={section === "documents"} count={documents.length || undefined} compact={sidebarCompact} onClick={() => goSection("documents")} />
         <NavItem icon={<Bookmark size={18}/>} label="Закладки и сайты" active={section === "saved"} compact={sidebarCompact} onClick={() => goSection("saved")} />
         <NavItem icon={<HistoryIcon size={18}/>} label="История" active={section === "history"} compact={sidebarCompact} onClick={() => goSection("history")} />
       </nav>
@@ -407,6 +418,7 @@ function App() {
           {section === "history" && <HistoryPage history={history} onOpen={url => void openTab(url)} onClear={clearHistory}/>}
           {section === "settings" && <SettingsPage version={version} storageBusy={storageBusy} onBackup={() => void createBackup()} onRestore={() => void restoreBackup()}/>}
           {section === "estimates" && <EstimatesPage estimates={estimates} onSave={item => { const exists = estimates.some(e => e.id === item.id); void persistEstimates(exists ? estimates.map(e => e.id === item.id ? item : e) : [item, ...estimates]); notify("Смета сохранена локально"); }} onDelete={id => { if (confirm("Удалить эту смету?")) void persistEstimates(estimates.filter(item => item.id !== id)); }}/>}
+          {section === "documents" && <DocumentsPage estimates={estimates} documents={documents} onSave={item => { const exists = documents.some(d => d.id === item.id); void persistDocuments(exists ? documents.map(d => d.id === item.id ? item : d) : [item, ...documents]); notify("Документ сохранён локально"); }} onDelete={id => { if (confirm("Удалить документ?")) void persistDocuments(documents.filter(item => item.id !== id)); }}/>} 
         </div>}
       </div>
       <footer className="status-bar"><span><span className="status-light"/> NEXUS работает локально</span>{pageError && <span className="error-status">{pageError}</span>}<span>Версия {version} <span className="status-separator">·</span> Данные остаются на этом устройстве</span></footer>
