@@ -21,6 +21,13 @@ describe("prospect CSV import", () => {
     expect(rows[0].notes).toBe('First line\nSecond "quoted" line');
   });
 
+  it("imports region and follow-up fields from exported Russian CSV", () => {
+    const rows = parseProspectsCsv("Компания;Регион;Следующий шаг;Дата контакта\nООО Строй;Москва;Позвонить;2026-10-20");
+    expect(rows[0].location).toBe("Москва");
+    expect(rows[0].nextAction).toBe("Позвонить");
+    expect(rows[0].followUpDate).toBe("2026-10-20");
+  });
+
   it("rejects malformed unclosed quoted fields", () => {
     expect(() => parseProspectsCsv('Company,Notes\nAcme,"unfinished')).toThrow(/незакрытое поле/);
   });

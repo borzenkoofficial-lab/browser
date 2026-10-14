@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { parseProspectsCsv } from "../lib/csv";
 import {
   Activity, ArrowDownToLine, ArrowLeft, ArrowRight, Bell, Bookmark,
-  Building2, Check, ChevronDown, CircleHelp, Command, Compass, Download, ExternalLink,
+  Building2, CalendarClock, Check, ChevronDown, CircleHelp, Command, Compass, Download, ExternalLink,
   FileSpreadsheet, Filter, Globe2, History as HistoryIcon, LayoutDashboard, ListFilter, Menu,
   MoreHorizontal, Plus, Search, Settings2, ShieldCheck, Sparkles, Star, Target,
   Trash2, Users, WandSparkles, X, Zap
@@ -10,7 +10,7 @@ import {
 
 type Prospect = {
   id: string; company: string; website: string; contact: string; email: string;
-  phone: string; industry: string; status: "Новый" | "В работе" | "Приоритет" | "Не подходит";
+  phone: string; location: string; nextAction: string; followUpDate: string; industry: string; status: "Новый" | "В работе" | "Приоритет" | "Не подходит";
   source: string; notes: string; createdAt: string;
 };
 type Tab = { id: string; title: string; url: string };
@@ -20,6 +20,7 @@ type Section = "home" | "prospects" | "research" | "saved" | "history" | "settin
 
 const starterProspects: Prospect[] = [];
 const makeId = () => crypto.randomUUID();
+const localDateKey = (date = new Date()) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 const shortHost = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url || "Новая вкладка"; } };
 
 function App() {
@@ -39,7 +40,7 @@ function App() {
   const [toast, setToast] = useState("");
   const [sidebarCompact, setSidebarCompact] = useState(false);
   const [storageBusy, setStorageBusy] = useState(false);
-  const [form, setForm] = useState({ company: "", website: "", contact: "", email: "", phone: "", industry: "Строительство", status: "Новый" as Prospect["status"], source: "Сайт компании", notes: "" });
+  const [form, setForm] = useState({ company: "", website: "", contact: "", email: "", phone: "", location: "Москва и Московская область", nextAction: "", followUpDate: "", industry: "Строительство", status: "Новый" as Prospect["status"], source: "Сайт компании", notes: "" });
   const viewportRef = useRef<HTMLDivElement>(null);
   const active = tabs.find(tab => tab.id === activeTab) ?? null;
 
@@ -240,7 +241,7 @@ function App() {
     notify("История очищена");
   };
 
-  const resetForm = () => setForm({ company: "", website: "", contact: "", email: "", phone: "", industry: "Строительство", status: "Новый", source: "Сайт компании", notes: "" });
+  const resetForm = () => setForm({ company: "", website: "", contact: "", email: "", phone: "", location: "Москва и Московская область", nextAction: "", followUpDate: "", industry: "Строительство", status: "Новый", source: "Сайт компании", notes: "" });
 
   const saveForm = async () => {
     if (!form.company.trim()) { notify("Укажите название компании"); return; }
@@ -256,14 +257,14 @@ function App() {
 
   const editProspect = (item: Prospect) => {
     setEditing(item);
-    setForm({ company: item.company, website: item.website, contact: item.contact, email: item.email, phone: item.phone, industry: item.industry, status: item.status, source: item.source, notes: item.notes });
+    setForm({ company: item.company, website: item.website, contact: item.contact, email: item.email, phone: item.phone, location: item.location || "", nextAction: item.nextAction || "", followUpDate: item.followUpDate || "", industry: item.industry, status: item.status, source: item.source, notes: item.notes });
     setShowAdd(true);
   };
 
   const exportCsv = () => {
-    const headers = ["Компания", "Сайт", "Контакт", "Email", "Телефон", "Отрасль", "Статус", "Источник", "Заметки", "Дата добавления"];
+    const headers = ["Компания", "Сайт", "Контакт", "Email", "Телефон", "Регион", "Следующий шаг", "Дата контакта", "Отрасль", "Статус", "Источник", "Заметки", "Дата добавления"];
     const quote = (v: unknown) => '"' + String(v ?? "").replace(/"/g, '""') + '"';
-    const lines = [headers, ...filtered.map(p => [p.company, p.website, p.contact, p.email, p.phone, p.industry, p.status, p.source, p.notes, p.createdAt])].map(row => row.map(quote).join(";"));
+    const lines = [headers, ...filtered.map(p => [p.company, p.website, p.contact, p.email, p.phone, p.location, p.nextAction, p.followUpDate, p.industry, p.status, p.source, p.notes, p.createdAt])].map(row => row.map(quote).join(";"));
     const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = "nexus-prospects.csv"; a.click(); URL.revokeObjectURL(url);
@@ -290,8 +291,16 @@ function App() {
 
   const filtered = useMemo(() => prospects.filter(p => {
     const q = prospectQuery.toLowerCase().trim();
-    const matches = !q || [p.company, p.website, p.contact, p.email, p.phone, p.industry, p.notes].some(v => (v || "").toLowerCase().includes(q));
-    return matches && (statusFilter === "Все статусы" || p.status === statusFilter);
+    const matches = !q || [p.company, p.website, p.contact, p.email, p.phone, p.location, p.nextAction, p.industry, p.notes].some(v => (v || "").toLowerCase().includes(q));
+    const today = localDateKey();
+    const dateMatches = statusFilter === "Просрочен контакт"
+      ? Boolean(p.followUpDate && p.followUpDate < today && p.status !== "Не подходит")
+      : statusFilter === "Контакт сегодня"
+        ? p.followUpDate === today && p.status !== "Не подходит"
+        : statusFilter === "Контакт в ближайшие 7 дней"
+          ? Boolean(p.followUpDate && p.followUpDate >= today && p.followUpDate <= localDateKey(new Date(Date.now() + 7 * 86400000)) && p.status !== "Не подходит")
+          : statusFilter === "Все статусы" || p.status === statusFilter;
+    return matches && dateMatches;
   }), [prospects, prospectQuery, statusFilter]);
 
   const goSection = (next: Section) => {
@@ -371,9 +380,9 @@ function App() {
 
       <div className="content-region">
         {activeTab && section === "home" ? <div className="web-viewport" ref={viewportRef} /> : <div className="page-scroll">
-          {section === "home" && <Dashboard prospects={prospects} onSearch={q => { setAddress(q); void openTab("https://www.google.com/search?q=" + encodeURIComponent(q)); }} onSection={goSection} onAdd={() => { resetForm(); setEditing(null); setShowAdd(true); }} onExport={exportCsv}/>}
+          {section === "home" && <Dashboard prospects={prospects} onSearch={q => { setAddress(q); void openTab("https://www.google.com/search?q=" + encodeURIComponent(q)); }} onSection={goSection} onAdd={() => { resetForm(); setEditing(null); setShowAdd(true); }} onExport={exportCsv} onFollowUpFilter={filter => setStatusFilter(filter)}/>}
           {section === "research" && <Research onSearch={(q, source = "Веб-поиск") => { const base = source === "Яндекс" ? "https://yandex.ru/search/?text=" : source === "Bing" ? "https://www.bing.com/search?q=" : "https://www.google.com/search?q="; setAddress(base + encodeURIComponent(q)); void openTab(base + encodeURIComponent(q)); }} onSave={() => { resetForm(); setForm(p => ({ ...p, source: "Поиск клиентов" })); setShowAdd(true); }}/>}
-          {section === "prospects" && <ProspectsPage prospects={filtered} query={prospectQuery} setQuery={setProspectQuery} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onAdd={() => { resetForm(); setEditing(null); setShowAdd(true); }} onEdit={editProspect} onDelete={id => { if (confirm("Удалить компанию из локальной базы?")) void persistProspects(prospects.filter(p => p.id !== id)); }} onExport={exportCsv} onOpen={url => void openTab(url)} onImport={importCsv}/>}
+          {section === "prospects" && <ProspectsPage prospects={filtered} query={prospectQuery} setQuery={setProspectQuery} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onAdd={() => { resetForm(); setEditing(null); setShowAdd(true); }} onEdit={editProspect} onDelete={id => { if (confirm("Удалить компанию из локальной базы?")) void persistProspects(prospects.filter(p => p.id !== id)); }} onStatusChange={(item, status) => { void persistProspects(prospects.map(p => p.id === item.id ? { ...p, status } : p)); }} onExport={exportCsv} onOpen={url => void openTab(url)} onImport={importCsv}/>}
           {section === "saved" && <SavedPage bookmarks={bookmarks} prospects={prospects} onOpen={url => void openTab(url)} onSection={goSection} onRemoveBookmark={id => void removeBookmark(id)}/>}
           {section === "history" && <HistoryPage history={history} onOpen={url => void openTab(url)} onClear={clearHistory}/>}
           {section === "settings" && <SettingsPage version={version} storageBusy={storageBusy} onBackup={() => void createBackup()} onRestore={() => void restoreBackup()}/>}
@@ -392,6 +401,9 @@ function App() {
           <label className="field"><span>Отрасль</span><select value={form.industry} onChange={e => setForm(p => ({ ...p, industry: e.target.value }))}><option>Строительство</option><option>Недвижимость</option><option>Управление объектами</option><option>Ремонт и отделка</option><option>Производство</option><option>Торговля</option><option>Услуги</option><option>Другое</option></select></label>
           <label className="field"><span>Email</span><input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="name@company.ru"/></label>
           <label className="field"><span>Телефон</span><input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} placeholder="+7…"/></label>
+          <label className="field"><span>Регион / город</span><input value={form.location} onChange={e => setForm(p => ({ ...p, location: e.target.value }))} placeholder="Москва, Московская область"/></label>
+          <label className="field"><span>Следующий шаг</span><input value={form.nextAction} onChange={e => setForm(p => ({ ...p, nextAction: e.target.value }))} placeholder="Позвонить, отправить КП…"/></label>
+          <label className="field"><span>Дата следующего контакта</span><input type="date" value={form.followUpDate} onChange={e => setForm(p => ({ ...p, followUpDate: e.target.value }))}/></label>
           <label className="field"><span>Статус</span><select value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value as Prospect["status"] }))}><option>Новый</option><option>В работе</option><option>Приоритет</option><option>Не подходит</option></select></label>
           <label className="field full"><span>Источник информации</span><input value={form.source} onChange={e => setForm(p => ({ ...p, source: e.target.value }))} placeholder="Сайт, каталог, рекомендация…"/></label>
           <label className="field full"><span>Заметки</span><textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={3} placeholder="Чем занимается компания, потенциальная потребность…"/></label>
@@ -411,7 +423,7 @@ function PageHeader({ eyebrow, title, description, action }: { eyebrow: string; 
   return <div className="page-header"><div><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p>{description}</p></div>{action}</div>;
 }
 
-function Dashboard({ prospects, onSearch, onSection, onAdd, onExport }: { prospects: Prospect[]; onSearch: (q: string) => void; onSection: (s: Section) => void; onAdd: () => void; onExport: () => void }) {
+function Dashboard({ prospects, onSearch, onSection, onAdd, onExport, onFollowUpFilter }: { prospects: Prospect[]; onSearch: (q: string) => void; onSection: (s: Section) => void; onAdd: () => void; onExport: () => void; onFollowUpFilter: (filter: string) => void }) {
   const [query, setQuery] = useState("");
   const today = new Intl.DateTimeFormat("ru-RU", { weekday: "long", day: "numeric", month: "long" }).format(new Date());
   return <div className="dashboard-page">
@@ -424,6 +436,19 @@ function Dashboard({ prospects, onSearch, onSection, onAdd, onExport }: { prospe
       <Metric icon={<Activity size={18}/>} label="В работе" value={prospects.filter(p => p.status === "В работе").length.toString()} detail="Активные контакты" tone="green"/>
       <Metric icon={<Zap size={18}/>} label="Новые" value={prospects.filter(p => p.status === "Новый").length.toString()} detail="Ещё не обработаны" tone="amber"/>
     </div>
+    {(() => {
+      const todayKey = localDateKey();
+      const activeFollowUps = prospects.filter(p => p.followUpDate && p.status !== "Не подходит").sort((a, b) => a.followUpDate.localeCompare(b.followUpDate));
+      const overdue = activeFollowUps.filter(p => p.followUpDate < todayKey);
+      const dueToday = activeFollowUps.filter(p => p.followUpDate === todayKey);
+      const upcoming = activeFollowUps.filter(p => p.followUpDate > todayKey && p.followUpDate <= localDateKey(new Date(Date.now() + 7 * 86400000)));
+      const openFollowUps = (filter: string) => { onFollowUpFilter(filter); onSection("prospects"); };
+      return <section className="panel follow-up-panel"><div className="panel-heading"><div><h3>Контроль контактов</h3><p>Следующие действия по клиентской базе</p></div><CalendarClock size={18}/></div><div className="follow-up-summary">
+        <button className={overdue.length ? "follow-up-stat overdue-stat" : "follow-up-stat"} onClick={() => openFollowUps("Просрочен контакт")}><span>Просрочено</span><b>{overdue.length}</b><small>Нужно связаться</small></button>
+        <button className="follow-up-stat today-stat" onClick={() => openFollowUps("Контакт сегодня")}><span>На сегодня</span><b>{dueToday.length}</b><small>Запланировано</small></button>
+        <button className="follow-up-stat upcoming-stat" onClick={() => openFollowUps("Контакт в ближайшие 7 дней")}><span>7 дней</span><b>{upcoming.length}</b><small>Скоро связаться</small></button>
+      </div>{activeFollowUps.length ? <div className="follow-up-list">{activeFollowUps.slice(0, 5).map(p => <button className="follow-up-row" key={p.id} onClick={() => { onFollowUpFilter("Все статусы"); onSection("prospects"); }}><span className="company-monogram">{p.company.slice(0, 1).toUpperCase()}</span><span className="follow-up-company"><b>{p.company}</b><small>{p.nextAction || "Связаться с компанией"}</small></span><span className={p.followUpDate < todayKey ? "follow-up overdue" : p.followUpDate === todayKey ? "follow-up due-today" : "follow-up"}>{p.followUpDate}</span><ArrowRight size={14}/></button>)}</div> : <div className="follow-up-empty">Добавьте дату контакта в карточке компании — здесь появится список следующих действий.</div>}</section>;
+    })()}
     <div className="dashboard-bottom">
       <section className="panel quick-panel"><div className="panel-heading"><div><h3>Быстрые действия</h3><p>Основные инструменты под рукой</p></div><MoreHorizontal size={18}/></div>
         <button className="quick-action" onClick={() => onSection("research")}><span className="quick-icon violet"><Search size={17}/></span><span><b>Найти компании</b><small>Поиск через веб-источники</small></span><ArrowRight size={16}/></button>
@@ -464,11 +489,11 @@ function Research({ onSearch, onSave }: { onSearch: (q: string, source?: string)
   </div>;
 }
 
-function ProspectsPage({ prospects, query, setQuery, statusFilter, setStatusFilter, onAdd, onEdit, onDelete, onExport, onOpen, onImport }: { prospects: Prospect[]; query: string; setQuery: (v: string) => void; statusFilter: string; setStatusFilter: (v: string) => void; onAdd: () => void; onEdit: (p: Prospect) => void; onDelete: (id: string) => void; onExport: () => void; onOpen: (url: string) => void; onImport: (file: File) => void }) {
+function ProspectsPage({ prospects, query, setQuery, statusFilter, setStatusFilter, onAdd, onEdit, onDelete, onStatusChange, onExport, onOpen, onImport }: { prospects: Prospect[]; query: string; setQuery: (v: string) => void; statusFilter: string; setStatusFilter: (v: string) => void; onAdd: () => void; onEdit: (p: Prospect) => void; onDelete: (id: string) => void; onStatusChange: (p: Prospect, status: Prospect["status"]) => void; onExport: () => void; onOpen: (url: string) => void; onImport: (file: File) => void }) {
   return <div className="standard-page"><PageHeader eyebrow="УПРАВЛЕНИЕ ПРОДАЖАМИ" title="База компаний" description="Единый список потенциальных клиентов, контактов и источников." action={<button className="button button-primary" onClick={onAdd}><Plus size={16}/> Добавить компанию</button>}/>
-    <div className="table-toolbar"><div className="table-search"><Search size={16}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Поиск по компании, сайту, контакту…"/></div><div className="table-filters"><Filter size={15}/><select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option>Все статусы</option><option>Новый</option><option>В работе</option><option>Приоритет</option><option>Не подходит</option></select><label className="button button-secondary import-button"><ArrowDownToLine size={15}/> Импорт CSV<input type="file" accept=".csv,text/csv" onChange={e => { const file = e.target.files?.[0]; if (file) onImport(file); e.currentTarget.value = ""; }}/></label><button className="button button-secondary" onClick={onExport}><Download size={15}/> Экспорт CSV</button></div></div>
+    <div className="table-toolbar"><div className="table-search"><Search size={16}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Поиск по компании, сайту, контакту…"/></div><div className="table-filters"><Filter size={15}/><select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option>Все статусы</option><option>Новый</option><option>В работе</option><option>Приоритет</option><option>Не подходит</option><option>Просрочен контакт</option><option>Контакт сегодня</option><option>Контакт в ближайшие 7 дней</option></select><label className="button button-secondary import-button"><ArrowDownToLine size={15}/> Импорт CSV<input type="file" accept=".csv,text/csv" onChange={e => { const file = e.target.files?.[0]; if (file) onImport(file); e.currentTarget.value = ""; }}/></label><button className="button button-secondary" onClick={onExport}><Download size={15}/> Экспорт CSV</button></div></div>
     <div className="panel table-panel"><div className="table-count"><span>Компании <b>{prospects.length}</b></span><span>Локальная база <span className="status-light"/></span></div>
-      {prospects.length === 0 ? <div className="empty-state"><div className="empty-icon"><Users size={24}/></div><h3>Пока нет компаний</h3><p>Добавьте первую компанию вручную или сохраните её с открытого сайта. Записи будут доступны после перезапуска.</p><button className="button button-primary" onClick={onAdd}><Plus size={16}/> Добавить первую компанию</button></div> : <div className="table-scroll"><table><thead><tr><th>Компания</th><th>Отрасль</th><th>Контактные данные</th><th>Источник</th><th>Статус</th><th></th></tr></thead><tbody>{prospects.map(p => <tr key={p.id}><td><div className="table-company"><div className="company-monogram">{p.company.slice(0,1).toUpperCase()}</div><div><b>{p.company}</b>{p.website && <a href="#" onClick={e => { e.preventDefault(); onOpen(p.website); }}>{shortHost(p.website)}</a>}</div></div></td><td>{p.industry || "—"}</td><td><div className="contact-cell">{p.contact && <span>{p.contact}</span>}{p.email && <span>{p.email}</span>}{p.phone && <span>{p.phone}</span>}{!p.contact && !p.email && !p.phone && "—"}</div></td><td>{p.source || "—"}</td><td><StatusBadge status={p.status}/></td><td><div className="row-actions"><button className="icon-button" title="Редактировать" onClick={() => onEdit(p)}><Settings2 size={15}/></button><button className="icon-button danger-hover" title="Удалить" onClick={() => onDelete(p.id)}><Trash2 size={15}/></button></div></td></tr>)}</tbody></table></div>}
+      {prospects.length === 0 ? <div className="empty-state"><div className="empty-icon"><Users size={24}/></div><h3>Пока нет компаний</h3><p>Добавьте первую компанию вручную или сохраните её с открытого сайта. Записи будут доступны после перезапуска.</p><button className="button button-primary" onClick={onAdd}><Plus size={16}/> Добавить первую компанию</button></div> : <div className="table-scroll"><table><thead><tr><th>Компания</th><th>Регион</th><th>Отрасль</th><th>Контактные данные</th><th>Следующий шаг</th><th>Источник</th><th>Статус</th><th></th></tr></thead><tbody>{prospects.map(p => <tr key={p.id}><td><div className="table-company"><div className="company-monogram">{p.company.slice(0,1).toUpperCase()}</div><div><b>{p.company}</b>{p.website && <a href="#" onClick={e => { e.preventDefault(); onOpen(p.website); }}>{shortHost(p.website)}</a>}</div></div></td><td>{p.location || "—"}</td><td>{p.industry || "—"}</td><td><div className="contact-cell">{p.contact && <span>{p.contact}</span>}{p.email && <span>{p.email}</span>}{p.phone && <span>{p.phone}</span>}{!p.contact && !p.email && !p.phone && "—"}</div></td><td><div className="contact-cell">{p.nextAction && <span>{p.nextAction}</span>}{p.followUpDate && <small className={p.followUpDate < new Date().toISOString().slice(0, 10) ? "follow-up overdue" : "follow-up"}>{p.followUpDate}</small>}{!p.nextAction && !p.followUpDate && "—"}</div></td><td>{p.source || "—"}</td><td><select className="status-select" aria-label={`Статус компании ${p.company}`} value={p.status} onChange={e => onStatusChange(p, e.target.value as Prospect["status"])}><option>Новый</option><option>В работе</option><option>Приоритет</option><option>Не подходит</option></select></td><td><div className="row-actions"><button className="icon-button" title="Редактировать" onClick={() => onEdit(p)}><Settings2 size={15}/></button><button className="icon-button danger-hover" title="Удалить" onClick={() => onDelete(p.id)}><Trash2 size={15}/></button></div></td></tr>)}</tbody></table></div>}
     </div>
   </div>;
 }

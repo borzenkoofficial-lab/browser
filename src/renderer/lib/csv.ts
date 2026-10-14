@@ -1,5 +1,5 @@
 export type CsvProspectRow = {
-  company: string; website: string; contact: string; email: string; phone: string;
+  company: string; website: string; contact: string; email: string; phone: string; location: string; nextAction: string; followUpDate: string;
   industry: string; status: "Новый" | "В работе" | "Приоритет" | "Не подходит";
   source: string; notes: string; createdAt: string;
 };
@@ -55,6 +55,9 @@ export function parseProspectsCsv(text: string): CsvProspectRow[] {
     contact: index("контакт", "контактноелицо", "contact", "person"),
     email: index("email", "почта", "электроннаяпочта", "e-mail"),
     phone: index("телефон", "phone", "mobile"),
+    location: index("регион", "город", "местоположение", "location", "region"),
+    nextAction: index("следующийшаг", "следующеедействие", "nextaction", "nextstep"),
+    followUpDate: index("датаконтакта", "датаследующегоконтакта", "followupdate", "nextcontactdate"),
     industry: index("отрасль", "industry", "сфера"),
     status: index("статус", "status"),
     source: index("источник", "source"),
@@ -71,7 +74,7 @@ export function parseProspectsCsv(text: string): CsvProspectRow[] {
       : "Новый";
     return {
       company: get("company"), website: get("website"), contact: get("contact"), email: get("email"),
-      phone: get("phone"), industry: get("industry"), status, source: get("source"), notes: get("notes"),
+      phone: get("phone"), location: get("location"), nextAction: get("nextAction"), followUpDate: get("followUpDate"), industry: get("industry"), status, source: get("source"), notes: get("notes"),
       createdAt: get("createdAt") || new Date().toISOString()
     };
   }).filter(row => row.company.length > 0);
