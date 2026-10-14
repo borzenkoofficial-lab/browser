@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld("nexus", {
   setBounds: (id: string, bounds: { x: number; y: number; width: number; height: number } | null) => ipcRenderer.invoke("browser:bounds", id, bounds),
   closeTab: (id: string) => ipcRenderer.invoke("browser:close", id),
   getTabState: (id: string) => ipcRenderer.invoke("browser:state", id),
+  extractPage: (id: string) => ipcRenderer.invoke("browser:extract", id) as Promise<{ url: string; title: string; description: string; text: string }>,
   listProspects: () => ipcRenderer.invoke("prospects:list"),
   saveProspects: (records: unknown[]) => ipcRenderer.invoke("prospects:save", records),
   listBookmarks: () => ipcRenderer.invoke("bookmarks:list"),
