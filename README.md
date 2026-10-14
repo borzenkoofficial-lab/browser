@@ -29,7 +29,7 @@ Requirements: Node.js 20 LTS or newer and npm.
 Run in PowerShell:
 
 ```powershell
-npm install
+npm ci
 npm run dev
 npm test
 npm run build
