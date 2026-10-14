@@ -43,13 +43,13 @@ describe("prospect CSV import", () => {
   });
 
   it("imports source URL and source verification date from CSV", () => {
-    const rows = parseProspectsCsv("Компания;URL источника;Дата проверки источника\\nООО Строй;https://example.ru/catalog;2026-10-14");
+    const rows = parseProspectsCsv("Компания;URL источника;Дата проверки источника\nООО Строй;https://example.ru/catalog;2026-10-14");
     expect(rows[0].sourceUrl).toBe("https://example.ru/catalog");
     expect(rows[0].sourceCapturedAt).toBe("2026-10-14");
   });
 
   it("keeps source provenance optional for older CSV exports", () => {
-    const rows = parseProspectsCsv("Компания;Сайт\\nООО Строй;https://example.ru");
+    const rows = parseProspectsCsv("Компания;Сайт\nООО Строй;https://example.ru");
     expect(rows[0].sourceUrl).toBe("");
     expect(rows[0].sourceCapturedAt).toBe("");
   });
