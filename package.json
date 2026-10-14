@@ -10,7 +10,7 @@
     "start": "electron .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "dist:win": "npm run build && electron-builder --win nsis"
+    "dist:win": "npm run build && electron-builder --win nsis --publish never"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
@@ -33,9 +33,28 @@
   "build": {
     "appId": "dev.nexus.businessbrowser",
     "productName": "NEXUS Business Browser",
-    "directories": { "output": "release" },
-    "files": ["dist/**/*", "dist-electron/**/*", "package.json"],
-    "win": { "target": [{ "target": "nsis", "arch": ["x64"] }] },
-    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "createDesktopShortcut": true }
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
   }
 }
