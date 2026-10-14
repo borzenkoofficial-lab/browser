@@ -102,7 +102,8 @@ These supplement the 40-tool baseline and do not replace it.
 - Recent business searches: keep the last five searches with intent/source/query and allow repeat/clear.
 - Prospect deduplication by website: normalize host, ignore protocol, www and path; open existing record instead of creating a duplicate.
 - Contact candidate extraction: extract unique email/phone candidates from the open page, keep additional candidates in notes, label as unverified. Not proof that contact details are current.
-- Lead source provenance (added with this audit batch): store the source URL and source-check date on the company record; capture them when saving an open site; preserve them through CSV import/export; validate HTTP(S) URLs and real ISO dates.
+- Lead source provenance: store source URL and source-check date on the company record; capture them when saving an open site; preserve them through CSV import/export; validate HTTP(S) URLs and real ISO dates.
+- Application-page capture (in progress): on demand, collect visible form values, page headings, table text, links, title and public contact candidates into a reviewable local company note. Exclude password/hidden/file and recognizable payment/credential fields; never submit forms automatically. This is a first-pass extractor, not a universal parser for every tender platform.
 - Proposed major UX/function expansions to fold into the matching baseline modules: a dedicated client acquisition workspace; sales pipeline/next-action dashboard; company intelligence timeline; AI-assisted page summaries and outreach drafts; richer project/tab workspaces; source freshness and data-quality indicators. These are roadmap additions, not claims that they are implemented.
 
 ## Engineering and data integrity rules
