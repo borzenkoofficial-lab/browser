@@ -3,7 +3,7 @@ import { parseProspectsCsv } from "../lib/csv";
 import {
   Activity, ArrowDownToLine, ArrowLeft, ArrowRight, Bell, Bookmark,
   Building2, CalendarClock, Calculator, Check, ChevronDown, CircleHelp, Command, Compass, Download, ExternalLink,
-  FileSpreadsheet, Filter, Globe2, History as HistoryIcon, LayoutDashboard, ListFilter, Menu,
+  FileSpreadsheet, FileText, Filter, Globe2, History as HistoryIcon, LayoutDashboard, ListFilter, Menu, Printer,
   MoreHorizontal, Plus, Search, Settings2, ShieldCheck, Sparkles, Star, Target,
   Trash2, Users, WandSparkles, X, Zap
 } from "lucide-react";
@@ -19,7 +19,8 @@ type BookmarkItem = { id: string; title: string; url: string; createdAt: string 
 type HistoryItem = { id: string; title: string; url: string; visitedAt: string };
 type EstimateLine = { id: string; name: string; unit: string; quantity: number; price: number; cost: number };
 type Estimate = { id: string; title: string; customer: string; object: string; status: "Черновик" | "КП подготовлено" | "Согласовано"; notes: string; items: EstimateLine[]; createdAt: string; updatedAt: string };
-type Section = "home" | "prospects" | "research" | "saved" | "history" | "settings" | "estimates";
+type BusinessDocument = { id: string; number: string; title: string; template: "premium" | "classic" | "minimal"; customer: string; supplier: string; object: string; date: string; validUntil: string; terms: string; notes: string; status: "Черновик" | "Подготовлен" | "Отправлен" | "Согласован"; items: EstimateLine[]; estimateId: string; createdAt: string; updatedAt: string };
+type Section = "home" | "prospects" | "research" | "saved" | "history" | "settings" | "estimates" | "documents";
 
 const starterProspects: Prospect[] = [];
 const makeId = () => crypto.randomUUID();
@@ -36,6 +37,7 @@ function App() {
   const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [estimates, setEstimates] = useState<Estimate[]>([]);
+  const [documents, setDocuments] = useState<BusinessDocument[]>([]);
   const [prospectQuery, setProspectQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Все статусы");
   const [showAdd, setShowAdd] = useState(false);
@@ -60,6 +62,7 @@ function App() {
     void window.nexus.listBookmarks().then(items => { if (Array.isArray(items)) setBookmarks(items as BookmarkItem[]); }).catch(() => undefined);
     void window.nexus.listHistory().then(items => { if (Array.isArray(items)) setHistory(items as HistoryItem[]); }).catch(() => undefined);
     void window.nexus.listEstimates().then(items => { if (Array.isArray(items)) setEstimates(items as Estimate[]); }).catch(() => notify("Не удалось загрузить сметы"));
+    void window.nexus.listDocuments().then(items => { if (Array.isArray(items)) setDocuments(items as BusinessDocument[]); }).catch(() => notify("Не удалось загрузить документы"));
     void window.nexus.getVersion().then(setVersion).catch(() => undefined);
     const offTitle = window.nexus.onTitle(({ id, title }) => setTabs(prev => prev.map(t => t.id === id ? { ...t, title: title || shortHost(t.url) } : t)));
     const offNavigate = window.nexus.onNavigate(({ id, url }) => {
@@ -122,18 +125,19 @@ function App() {
   };
 
   const restoreBackup = async () => {
-    if (!confirm("Восстановление заменит текущие компании, закладки, историю и сметы данными из выбранной копии. Перед заменой будет создана страховочная копия. Продолжить?")) return;
+    if (!confirm("Восстановление заменит текущие компании, закладки, историю, сметы и документы данными из выбранной копии. Перед заменой будет создана страховочная копия. Продолжить?")) return;
     setStorageBusy(true);
     try {
       const result = await window.nexus.restoreBackup();
       if (result.cancelled) return;
-      const [nextProspects, nextBookmarks, nextHistory, nextEstimates] = await Promise.all([
-        window.nexus.listProspects(), window.nexus.listBookmarks(), window.nexus.listHistory(), window.nexus.listEstimates()
+      const [nextProspects, nextBookmarks, nextHistory, nextEstimates, nextDocuments] = await Promise.all([
+        window.nexus.listProspects(), window.nexus.listBookmarks(), window.nexus.listHistory(), window.nexus.listEstimates(), window.nexus.listDocuments()
       ]);
       setProspects(nextProspects as Prospect[]);
       setBookmarks(nextBookmarks as BookmarkItem[]);
       setHistory(nextHistory as HistoryItem[]);
       setEstimates(nextEstimates as Estimate[]);
+      setDocuments(nextDocuments as BusinessDocument[]);
       notify("Данные восстановлены; страховочная копия создана");
     } catch (error) {
       notify(error instanceof Error ? error.message : "Не удалось восстановить резервную копию");
@@ -152,6 +156,12 @@ function App() {
     setEstimates(next);
     try { await window.nexus.saveEstimates(next); }
     catch { notify("Не удалось сохранить сметы"); }
+  };
+
+  const persistDocuments = async (next: BusinessDocument[]) => {
+    setDocuments(next);
+    try { await window.nexus.saveDocuments(next); }
+    catch { notify("Не удалось сохранить документы"); }
   };
 
   const openTab = async (url = "https://www.google.com") => {
@@ -344,6 +354,7 @@ function App() {
         <NavItem icon={<Target size={18}/>} label="Поиск клиентов" active={section === "research"} compact={sidebarCompact} onClick={() => goSection("research")} />
         <NavItem icon={<Building2 size={18}/>} label="База компаний" active={section === "prospects"} count={prospects.length || undefined} compact={sidebarCompact} onClick={() => goSection("prospects")} />
         <NavItem icon={<Calculator size={18}/>} label="Сметы и прибыль" active={section === "estimates"} count={estimates.length || undefined} compact={sidebarCompact} onClick={() => goSection("estimates")} />
+        <NavItem icon={<FileText size={18}/>} label="Документы и КП" active={section === "documents"} count={documents.length || undefined} compact={sidebarCompact} onClick={() => goSection("documents")} />
         <NavItem icon={<Bookmark size={18}/>} label="Закладки и сайты" active={section === "saved"} compact={sidebarCompact} onClick={() => goSection("saved")} />
         <NavItem icon={<HistoryIcon size={18}/>} label="История" active={section === "history"} compact={sidebarCompact} onClick={() => goSection("history")} />
       </nav>
@@ -407,6 +418,7 @@ function App() {
           {section === "history" && <HistoryPage history={history} onOpen={url => void openTab(url)} onClear={clearHistory}/>}
           {section === "settings" && <SettingsPage version={version} storageBusy={storageBusy} onBackup={() => void createBackup()} onRestore={() => void restoreBackup()}/>}
           {section === "estimates" && <EstimatesPage estimates={estimates} onSave={item => { const exists = estimates.some(e => e.id === item.id); void persistEstimates(exists ? estimates.map(e => e.id === item.id ? item : e) : [item, ...estimates]); notify("Смета сохранена локально"); }} onDelete={id => { if (confirm("Удалить эту смету?")) void persistEstimates(estimates.filter(item => item.id !== id)); }}/>}
+          {section === "documents" && <DocumentsPage estimates={estimates} documents={documents} onSave={item => { const exists = documents.some(d => d.id === item.id); void persistDocuments(exists ? documents.map(d => d.id === item.id ? item : d) : [item, ...documents]); notify("Документ сохранён локально"); }} onDelete={id => { if (confirm("Удалить документ?")) void persistDocuments(documents.filter(item => item.id !== id)); }}/>} 
         </div>}
       </div>
       <footer className="status-bar"><span><span className="status-light"/> NEXUS работает локально</span>{pageError && <span className="error-status">{pageError}</span>}<span>Версия {version} <span className="status-separator">·</span> Данные остаются на этом устройстве</span></footer>
@@ -535,6 +547,92 @@ function ProspectsPage({ prospects, query, setQuery, statusFilter, setStatusFilt
   </div>;
 }
 
+
+
+const createBlankDocument = (sequence: number): BusinessDocument => {
+  const now = new Date();
+  const date = localDateKey(now);
+  const validUntil = localDateKey(new Date(now.getTime() + 7 * 86400000));
+  return {
+    id: makeId(), number: `КП-${now.getFullYear()}-${String(sequence).padStart(4, "0")}`,
+    title: "Коммерческое предложение", template: "premium", customer: "", supplier: "Исполнитель",
+    object: "", date, validUntil, terms: "Стоимость рассчитана по указанным объёмам. Окончательные сроки и условия оплаты согласуются сторонами.",
+    notes: "", status: "Черновик", items: [], estimateId: "", createdAt: now.toISOString(), updatedAt: now.toISOString()
+  };
+};
+
+function DocumentsPage({ estimates, documents, onSave, onDelete }: { estimates: Estimate[]; documents: BusinessDocument[]; onSave: (item: BusinessDocument) => void; onDelete: (id: string) => void }) {
+  const [activeId, setActiveId] = useState("new");
+  const [draft, setDraft] = useState<BusinessDocument>(() => createBlankDocument(1));
+  const [estimateChoice, setEstimateChoice] = useState("");
+  const money = (value: number) => new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", maximumFractionDigits: 2 }).format(value);
+  const revenue = draft.items.reduce((sum, item) => sum + item.quantity * item.price, 0);
+  useEffect(() => {
+    if (activeId === "new") return;
+    const current = documents.find(item => item.id === activeId);
+    if (current) setDraft({ ...current, items: current.items.map(line => ({ ...line })) });
+  }, [activeId, documents]);
+  const newDocument = () => { setDraft(createBlankDocument(documents.length + 1)); setActiveId("new"); };
+  const createFromEstimate = () => {
+    const estimate = estimates.find(item => item.id === estimateChoice);
+    if (!estimate) { alert("Сначала выберите сохранённую смету."); return; }
+    const base = createBlankDocument(documents.length + 1);
+    const document: BusinessDocument = {
+      ...base, title: `Коммерческое предложение — ${estimate.title}`,
+      customer: estimate.customer, object: estimate.object, notes: estimate.notes,
+      items: estimate.items.map(line => ({ ...line, id: makeId() })), estimateId: estimate.id
+    };
+    setDraft(document);
+    setActiveId("new");
+  };
+  const save = () => {
+    if (!draft.title.trim() || !draft.number.trim()) { alert("Укажите название и номер документа."); return; }
+    if (!draft.items.length) { alert("Добавьте смету или заполните документ позициями. Пустое КП сохранять нельзя."); return; }
+    const item = { ...draft, title: draft.title.trim(), number: draft.number.trim(), updatedAt: new Date().toISOString() };
+    onSave(item);
+    setActiveId(item.id);
+  };
+  const formattedDate = (value: string) => {
+    const date = new Date(`${value}T12:00:00`);
+    return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", year: "numeric" }).format(date);
+  };
+  return <div className="standard-page documents-page">
+    <PageHeader eyebrow="КОММЕРЧЕСКИЕ ДОКУМЕНТЫ" title="Документы и КП" description="Формируйте коммерческие предложения из сохранённых смет, выбирайте фирменный стиль и печатайте документ или сохраняйте его в PDF." action={<button className="button button-primary" onClick={newDocument}><Plus size={16}/> Новый документ</button>}/>
+    <div className="documents-layout">
+      <aside className="panel documents-list-panel"><div className="panel-heading"><div><h3>Мои документы</h3><p>{documents.length} сохранено локально</p></div><FileText size={18}/></div>
+        {estimates.length > 0 && <div className="from-estimate"><label className="field"><span>Создать КП из сметы</span><select value={estimateChoice} onChange={e => setEstimateChoice(e.target.value)}><option value="">Выберите смету…</option>{estimates.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label><button className="button button-secondary full-button" onClick={createFromEstimate}><FileText size={14}/> Сформировать КП</button></div>}
+        {documents.length ? <div className="document-list">{documents.slice().sort((a,b) => b.updatedAt.localeCompare(a.updatedAt)).map(item => <button key={item.id} className={activeId === item.id ? "document-list-item active" : "document-list-item"} onClick={() => setActiveId(item.id)}><span className="document-list-icon"><FileText size={15}/></span><span><b>{item.title}</b><small>{item.number} · {item.customer || "Без заказчика"}</small><small>{item.status}</small></span></button>)}</div> : <div className="estimate-empty">Документов пока нет. Выберите сохранённую смету или создайте документ вручную.</div>}
+      </aside>
+      <section className="document-workspace">
+        <div className="panel document-editor">
+          <div className="estimate-editor-top"><div><span className="eyebrow">НАСТРОЙКИ ДОКУМЕНТА</span><h2>{activeId === "new" ? "Новый документ" : draft.number}</h2></div><select aria-label="Статус документа" value={draft.status} onChange={e => setDraft(p => ({ ...p, status: e.target.value as BusinessDocument["status"] }))}><option>Черновик</option><option>Подготовлен</option><option>Отправлен</option><option>Согласован</option></select></div>
+          <div className="document-fields">
+            <label className="field"><span>Название документа *</span><input value={draft.title} onChange={e => setDraft(p => ({ ...p, title: e.target.value }))}/></label>
+            <label className="field"><span>Номер КП *</span><input value={draft.number} onChange={e => setDraft(p => ({ ...p, number: e.target.value }))}/></label>
+            <label className="field"><span>Заказчик</span><input value={draft.customer} onChange={e => setDraft(p => ({ ...p, customer: e.target.value }))} placeholder="Название компании"/></label>
+            <label className="field"><span>Исполнитель</span><input value={draft.supplier} onChange={e => setDraft(p => ({ ...p, supplier: e.target.value }))} placeholder="Название / ИП"/></label>
+            <label className="field"><span>Объект</span><input value={draft.object} onChange={e => setDraft(p => ({ ...p, object: e.target.value }))} placeholder="Адрес или название объекта"/></label>
+            <label className="field"><span>Дата документа</span><input type="date" value={draft.date} onChange={e => setDraft(p => ({ ...p, date: e.target.value }))}/></label>
+            <label className="field"><span>Предложение действительно до</span><input type="date" value={draft.validUntil} onChange={e => setDraft(p => ({ ...p, validUntil: e.target.value }))}/></label>
+            <label className="field"><span>Дизайн шаблона</span><select value={draft.template} onChange={e => setDraft(p => ({ ...p, template: e.target.value as BusinessDocument["template"] }))}><option value="premium">NEXUS — премиальный</option><option value="classic">Классический деловой</option><option value="minimal">Минимализм</option></select></label>
+            <label className="field full"><span>Условия и комментарии</span><textarea rows={2} value={draft.terms} onChange={e => setDraft(p => ({ ...p, terms: e.target.value }))}/></label>
+          </div>
+          <div className="document-editor-actions"><button className="button button-secondary" onClick={() => window.print()}><Printer size={15}/> Печать / сохранить PDF</button><div>{activeId !== "new" && <button className="button button-danger" onClick={() => { onDelete(draft.id); newDocument(); }}><Trash2 size={14}/> Удалить</button>}<button className="button button-primary" onClick={save}><Check size={15}/> Сохранить документ</button></div></div>
+        </div>
+        <div className={`print-document quote-template-${draft.template}`}>
+          <div className="quote-document-brand"><div className="quote-brand-mark">N</div><div><b>{draft.supplier || "Исполнитель"}</b><small>КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ</small></div><span className="quote-doc-number">{draft.number}</span></div>
+          <div className="quote-document-heading"><span>{draft.number} · {formattedDate(draft.date)}</span><h1>{draft.title}</h1><p>Подготовлено для: <b>{draft.customer || "Заказчик"}</b></p>{draft.object && <p>Объект: {draft.object}</p>}</div>
+          <table className="quote-document-table"><thead><tr><th>№</th><th>Наименование работ</th><th>Ед.</th><th>Количество</th><th>Цена</th><th>Сумма</th></tr></thead><tbody>{draft.items.map((line,index) => <tr key={line.id}><td>{index+1}</td><td>{line.name}</td><td>{line.unit}</td><td>{line.quantity.toLocaleString("ru-RU")}</td><td>{money(line.price)}</td><td>{money(line.quantity * line.price)}</td></tr>)}</tbody></table>
+          <div className="quote-document-total"><span>Итого по предложению</span><strong>{money(revenue)}</strong></div>
+          <div className="quote-document-terms"><h3>Условия предложения</h3><p>{draft.terms}</p>{draft.validUntil && <p>Предложение действительно до {formattedDate(draft.validUntil)}.</p>}</div>
+          {draft.notes && <div className="quote-document-notes"><b>Примечание к расчёту</b><p>{draft.notes}</p></div>}
+          <div className="quote-document-signatures"><div><span>Исполнитель</span><b>{draft.supplier || "________________"}</b><i>Подпись / печать</i></div><div><span>Заказчик</span><b>{draft.customer || "________________"}</b><i>Подпись</i></div></div>
+          <footer>Документ подготовлен в NEXUS Business Browser · {draft.number}</footer>
+        </div>
+      </section>
+    </div>
+  </div>;
+}
 
 const createBlankEstimate = (): Estimate => {
   const now = new Date().toISOString();

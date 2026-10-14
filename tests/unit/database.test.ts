@@ -106,6 +106,33 @@ describe("SQLite repository storage", () => {
     expect(listRecords("estimates")).toEqual([]);
   });
 
+  it("stores commercial proposal documents and includes them in backups", async () => {
+    await setup();
+    const document = {
+      id: "d1", number: "КП-2026-0001", title: "КП на демонтаж", template: "premium",
+      customer: "ООО Заказчик", supplier: "ИП Исполнитель", object: "Москва",
+      date: "2026-10-14", validUntil: "2026-10-21", terms: "Условия согласуются отдельно.",
+      status: "Черновик", notes: "", estimateId: "", createdAt: "2026-10-14T10:00:00.000Z",
+      updatedAt: "2026-10-14T10:00:00.000Z",
+      items: [{ id: "l1", name: "Демонтаж перегородок", unit: "м²", quantity: 25, price: 700, cost: 430 }]
+    };
+    replaceRecords("documents", [document]);
+    expect(listRecords("documents")).toEqual([document]);
+    const backupPath = path.join(tempDir, "backups", "documents.sqlite");
+    expect((await createBackup(backupPath)).integrity).toBe("ok");
+    replaceRecords("documents", []);
+    await restoreBackup(backupPath);
+    expect(listRecords("documents")).toEqual([document]);
+  });
+
+  it("rejects documents with an unknown template", async () => {
+    await setup();
+    expect(() => replaceRecords("documents", [{
+      id: "d2", number: "КП-2", title: "КП", template: "untrusted-html", items: []
+    }])).toThrow(/шаблон/);
+    expect(listRecords("documents")).toEqual([]);
+  });
+
   it("creates and restores a verified backup", async () => {
     await setup();
     replaceRecords("prospects", [{ id: "p1", company: "Исходная компания" }]);

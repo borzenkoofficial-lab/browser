@@ -4,14 +4,14 @@ import fs from "node:fs/promises";
 import * as fsSync from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
-import { validateBookmark, validateEstimate, validateHistoryItem, validateProspect, requireArray } from "./validation";
+import { validateBookmark, validateDocument, validateEstimate, validateHistoryItem, validateProspect, requireArray } from "./validation";
 
 export type StoredRecord = Record<string, unknown>;
-type DataKind = "prospects" | "bookmarks" | "history" | "estimates";
-type LegacyDataKind = Exclude<DataKind, "estimates">;
+type DataKind = "prospects" | "bookmarks" | "history" | "estimates" | "documents";
+type LegacyDataKind = Exclude<DataKind, "estimates" | "documents">;
 type SqlValue = string | number | null | Uint8Array;
 
-const MIGRATION_VERSION = 2;
+const MIGRATION_VERSION = 3;
 const requireFromProject = createRequire(path.join(process.cwd(), "package.json"));
 let connection: SqlDatabase | null = null;
 let sqlModule: SqlJsStatic | null = null;
@@ -81,7 +81,7 @@ function readLegacyRecords(filePath: string, kind: DataKind): StoredRecord[] {
     throw new Error(`Не удалось прочитать старые данные: ${path.basename(filePath)}. Исходный файл сохранён; миграция остановлена.`);
   }
   const records = requireArray(parsed, path.basename(filePath));
-  const validator = kind === "prospects" ? validateProspect : kind === "bookmarks" ? validateBookmark : kind === "history" ? validateHistoryItem : validateEstimate;
+  const validator = kind === "prospects" ? validateProspect : kind === "bookmarks" ? validateBookmark : kind === "history" ? validateHistoryItem : kind === "estimates" ? validateEstimate : validateDocument;
   return records.map(validator);
 }
 
@@ -152,13 +152,20 @@ function createSchema(database: SqlDatabase): void {
       payload_json TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_estimates_created_at ON estimates(created_at);
+    CREATE TABLE IF NOT EXISTS documents (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT '',
+      payload_json TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_documents_created_at ON documents(created_at);
   `);
   run(database, "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)", [MIGRATION_VERSION, new Date().toISOString()]);
 }
 
 function saveRows(database: SqlDatabase, kind: DataKind, records: StoredRecord[]): void {
   if (records.length === 0) return;
-  const validator = kind === "prospects" ? validateProspect : kind === "bookmarks" ? validateBookmark : kind === "history" ? validateHistoryItem : validateEstimate;
+  const validator = kind === "prospects" ? validateProspect : kind === "bookmarks" ? validateBookmark : kind === "history" ? validateHistoryItem : kind === "estimates" ? validateEstimate : validateDocument;
   const rows = records.map(record => {
     const item = validator(record);
     if (kind === "prospects") return {
@@ -223,14 +230,14 @@ function validateBackupDatabase(database: SqlDatabase): void {
   const versionRows = queryRows(database, "SELECT MAX(version) AS version FROM schema_migrations");
   const version = Number(versionRows[0]?.version ?? 0);
   if (!version || version > MIGRATION_VERSION) throw new Error("Версия резервной копии несовместима с этой версией приложения");
-  for (const table of ["prospects", "bookmarks", "history", "estimates"]) {
+  for (const table of ["prospects", "bookmarks", "history", "estimates", "documents"]) {
     const found = queryRows(database, "SELECT name FROM sqlite_master WHERE type='table' AND name=?", [table]);
     if (!found.length) {
-      if (table === "estimates") continue;
+      if (table === "estimates" || table === "documents") continue;
       throw new Error("В резервной копии отсутствуют необходимые таблицы");
     }
     const payloads = queryRows(database, `SELECT payload_json FROM ${table}`);
-    const validator = table === "prospects" ? validateProspect : table === "bookmarks" ? validateBookmark : table === "history" ? validateHistoryItem : validateEstimate;
+    const validator = table === "prospects" ? validateProspect : table === "bookmarks" ? validateBookmark : table === "history" ? validateHistoryItem : table === "estimates" ? validateEstimate : validateDocument;
     for (const row of payloads) {
       let parsed: unknown;
       try { parsed = JSON.parse(String(row.payload_json)); }
@@ -273,7 +280,7 @@ export function listRecords(kind: DataKind): StoredRecord[] {
 
 export function replaceRecords(kind: DataKind, input: unknown): boolean {
   const records = requireArray(input, kind);
-  const validator = kind === "prospects" ? validateProspect : kind === "bookmarks" ? validateBookmark : kind === "history" ? validateHistoryItem : validateEstimate;
+  const validator = kind === "prospects" ? validateProspect : kind === "bookmarks" ? validateBookmark : kind === "history" ? validateHistoryItem : kind === "estimates" ? validateEstimate : validateDocument;
   const validated = records.map(validator);
   const database = db();
   const SQL = sqlModule;
