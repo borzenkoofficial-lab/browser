@@ -20,6 +20,14 @@ export function requireArray(value: unknown, label: string): JsonRecord[] {
   return value.map((item, index) => requireRecord(item, `${label}[${index}]`));
 }
 
+function isValidIsoDate(value: string): boolean {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return false;
+  const [, year, month, day] = match;
+  const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  return date.getUTCFullYear() === Number(year) && date.getUTCMonth() === Number(month) - 1 && date.getUTCDate() === Number(day);
+}
+
 export function validateProspect(value: unknown): JsonRecord {
   const item = requireRecord(value, "Компания");
   const id = requireString(item.id, "id", 200).trim();
@@ -27,6 +35,9 @@ export function validateProspect(value: unknown): JsonRecord {
   if (!id || !company) throw new Error("У компании должны быть id и название");
   for (const field of ["website", "contact", "email", "phone", "location", "nextAction", "followUpDate", "industry", "status", "source", "notes", "createdAt"]) {
     if (item[field] !== undefined) requireString(item[field], field);
+  }
+  if (typeof item.followUpDate === "string" && item.followUpDate && !isValidIsoDate(item.followUpDate)) {
+    throw new Error("Дата следующего контакта должна быть реальной датой в формате ГГГГ-ММ-ДД");
   }
   if (item.tags !== undefined) {
     if (!Array.isArray(item.tags) || item.tags.length > 20) throw new Error("Некорректное поле: tags");

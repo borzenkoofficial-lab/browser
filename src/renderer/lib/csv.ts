@@ -36,6 +36,24 @@ function parseRecords(text: string, delimiter: string): string[][] {
   return records;
 }
 
+function normalizeFollowUpDate(value: string, rowNumber: number): string {
+  if (!value) return "";
+  let iso = value;
+  const localized = value.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/);
+  if (localized) {
+    const [, day, month, year] = localized;
+    iso = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+  const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) throw new Error(`CSV: некорректная дата контакта в строке ${rowNumber}: «${value}». Используйте ГГГГ-ММ-ДД или ДД.ММ.ГГГГ.`);
+  const [, year, month, day] = match;
+  const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  if (date.getUTCFullYear() !== Number(year) || date.getUTCMonth() !== Number(month) - 1 || date.getUTCDate() !== Number(day)) {
+    throw new Error(`CSV: несуществующая дата контакта в строке ${rowNumber}: «${value}».`);
+  }
+  return iso;
+}
+
 export function parseProspectsCsv(text: string): CsvProspectRow[] {
   const normalized = text.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n").trim();
   if (!normalized) return [];
@@ -67,15 +85,16 @@ export function parseProspectsCsv(text: string): CsvProspectRow[] {
   };
   if (columns.company < 0) throw new Error("Не найдена обязательная колонка «Компания» или «Company».");
 
-  return records.slice(1).map(values => {
+  return records.slice(1).map((values, rowIndex) => {
     const get = (key: keyof typeof columns) => columns[key] >= 0 ? (values[columns[key]] ?? "") : "";
     const rawStatus = get("status");
     const status: CsvProspectRow["status"] = ["Новый", "В работе", "Приоритет", "Не подходит"].includes(rawStatus)
       ? rawStatus as CsvProspectRow["status"]
       : "Новый";
+    const followUpDate = normalizeFollowUpDate(get("followUpDate"), rowIndex + 2);
     return {
       company: get("company"), website: get("website"), contact: get("contact"), email: get("email"),
-      phone: get("phone"), location: get("location"), nextAction: get("nextAction"), followUpDate: get("followUpDate"), industry: get("industry"), status, source: get("source"), notes: get("notes"),
+      phone: get("phone"), location: get("location"), nextAction: get("nextAction"), followUpDate, industry: get("industry"), status, source: get("source"), notes: get("notes"),
       tags: get("tags").split(/[;,]/).map(tag => tag.trim()).filter(Boolean).slice(0, 20),
       createdAt: get("createdAt") || new Date().toISOString()
     };
