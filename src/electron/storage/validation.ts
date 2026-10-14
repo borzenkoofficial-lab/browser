@@ -21,7 +21,7 @@ export function requireArray(value: unknown, label: string): JsonRecord[] {
 }
 
 function isValidIsoDate(value: string): boolean {
-  const match = value.match(/^(\\d{4})-(\\d{2})-(\\d{2})$/);
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return false;
   const [, year, month, day] = match;
   const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
