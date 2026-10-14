@@ -180,7 +180,7 @@ export function listRecords(kind: DataKind): StoredRecord[] {
   return rows.map(row => JSON.parse(row.payload_json) as StoredRecord);
 }
 
-export function replaceRecords(kind: DataKind, input: unknown[]): boolean {
+export function replaceRecords(kind: DataKind, input: unknown): boolean {
   const records = requireArray(input, kind);
   const validator = kind === "prospects" ? validateProspect : kind === "bookmarks" ? validateBookmark : validateHistoryItem;
   const validated = records.map(validator);
@@ -207,6 +207,7 @@ export async function createBackup(destinationPath: string): Promise<{ path: str
 
 export async function restoreBackup(sourcePath: string): Promise<{ restored: boolean; safetyBackupPath: string }> {
   if (!activePath) throw new Error("Локальная база ещё не инициализирована");
+  if (path.resolve(sourcePath) === path.resolve(activePath)) throw new Error("Нельзя восстановить базу из самого рабочего файла");
   const source = new Database(sourcePath, { readonly: true, fileMustExist: true });
   try {
     const result = source.pragma("integrity_check") as Array<{ integrity_check: string }>;
