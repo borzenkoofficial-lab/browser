@@ -376,19 +376,30 @@ function App() {
     let pageTitle = host;
     let description = "";
     let pageText = "";
+    let pageDataNote = "";
     let extractionFailed = false;
     try {
       const details = await window.nexus.extractPage(current.id);
       pageTitle = details.title?.trim() || host;
       description = details.description?.trim() || "";
       pageText = details.text || "";
+      const lines: string[] = [
+        "СБОР ДАННЫХ СО СТРАНИЦЫ",
+        `Страница: ${current.url}`,
+        `Заголовок: ${pageTitle}`,
+        details.headings?.length ? `Разделы страницы:\\n- ${details.headings.join("\\n- ")}` : "",
+        details.formFields?.length ? `Видимые поля формы / заявки:\\n${details.formFields.map(field => `- ${field.label}: ${field.value}`).join("\\n")}` : "Видимые заполненные поля формы не найдены.",
+        details.tables?.length ? `Таблицы / данные страницы:\\n${details.tables.map(table => table.slice(0, 2500)).join("\\n\\n---\\n\\n").slice(0, 12000)}` : "",
+        details.links?.length ? `Ссылки на странице:\\n${details.links.slice(0, 50).map(link => `- ${link.text}: ${link.url}`).join("\\n")}` : ""
+      ].filter(Boolean);
+      pageDataNote = lines.join("\\n\\n").slice(0, 24000);
     } catch {
       extractionFailed = true;
     }
 
     const { emails, phones } = extractContactCandidates(pageText);
     const candidateNote = formatContactCandidatesNote(emails, phones);
-    const pageNotes = [description, candidateNote].filter(Boolean).join("\n\n");
+    const pageNotes = [description, pageDataNote, candidateNote].filter(Boolean).join("\\n\\n");
     const existing = findProspectByWebsite(prospects, current.url);
     if (existing) {
       setEditing(existing);
@@ -406,7 +417,7 @@ function App() {
         source: existing.source || "Открытая вкладка",
         sourceUrl: existing.sourceUrl || current.url,
         sourceCapturedAt: existing.sourceCapturedAt || localDateKey(),
-        notes: candidateNote && existing.notes?.includes(candidateNote) ? existing.notes : [existing.notes, candidateNote].filter(Boolean).join("\n\n") || description,
+        notes: [existing.notes, pageDataNote && !existing.notes?.includes(`Страница: ${current.url}`) ? pageDataNote : "", candidateNote && !existing.notes?.includes(candidateNote) ? candidateNote : ""].filter(Boolean).join("\\n\\n") || description,
         tags: (existing.tags ?? []).join(", "),
         activityType: "Звонок",
         activityNote: ""
@@ -627,7 +638,7 @@ function App() {
           <input value={address} onChange={e => setAddress(e.target.value)} placeholder="Введите адрес сайта или поисковый запрос…" aria-label="Адрес или поисковый запрос"/>
           <button type="submit" title="Перейти"><ArrowRight size={16}/></button>
         </form>
-        <button className={`toolbar-action ${activeTab ? "" : "toolbar-action-primary"}`} onClick={saveCurrentSite}><Bookmark size={15}/><span>Сохранить компанию</span></button>
+        <button className={`toolbar-action ${activeTab ? "" : "toolbar-action-primary"}`} onClick={saveCurrentSite} disabled={!activeTab} title="Собрать видимые данные страницы, контакты, поля заявки и ссылки для проверки перед сохранением"><ClipboardList size={15}/><span>Собрать данные заявки</span></button>
         <button className="icon-button" title="Добавить сайт в закладки" onClick={() => void bookmarkCurrentSite()}><Star size={17}/></button>
       </div>
 
