@@ -28,6 +28,13 @@ describe("prospect CSV import", () => {
     expect(rows[0].followUpDate).toBe("2026-10-20");
   });
 
+  it("imports prospect tags from Russian and English CSV headers", () => {
+    const rows = parseProspectsCsv('Компания;Метки\nООО Строй;"генподрядчик, тендер"');
+    expect(rows[0].tags).toEqual(["генподрядчик", "тендер"]);
+    const english = parseProspectsCsv('Company,Tags\nAcme,"priority, contractor"');
+    expect(english[0].tags).toEqual(["priority", "contractor"]);
+  });
+
   it("rejects malformed unclosed quoted fields", () => {
     expect(() => parseProspectsCsv('Company,Notes\nAcme,"unfinished')).toThrow(/незакрытое поле/);
   });

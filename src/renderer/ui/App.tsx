@@ -8,10 +8,11 @@ import {
   Trash2, Users, WandSparkles, X, Zap
 } from "lucide-react";
 
+type ActivityEntry = { id: string; date: string; type: string; note: string };
 type Prospect = {
   id: string; company: string; website: string; contact: string; email: string;
   phone: string; location: string; nextAction: string; followUpDate: string; industry: string; status: "Новый" | "В работе" | "Приоритет" | "Не подходит";
-  source: string; notes: string; createdAt: string;
+  source: string; notes: string; createdAt: string; tags?: string[]; activity?: ActivityEntry[];
 };
 type Tab = { id: string; title: string; url: string };
 type BookmarkItem = { id: string; title: string; url: string; createdAt: string };
@@ -40,7 +41,7 @@ function App() {
   const [toast, setToast] = useState("");
   const [sidebarCompact, setSidebarCompact] = useState(false);
   const [storageBusy, setStorageBusy] = useState(false);
-  const [form, setForm] = useState({ company: "", website: "", contact: "", email: "", phone: "", location: "Москва и Московская область", nextAction: "", followUpDate: "", industry: "Строительство", status: "Новый" as Prospect["status"], source: "Сайт компании", notes: "" });
+  const [form, setForm] = useState({ company: "", website: "", contact: "", email: "", phone: "", location: "Москва и Московская область", nextAction: "", followUpDate: "", industry: "Строительство", status: "Новый" as Prospect["status"], source: "Сайт компании", notes: "", tags: "", activityType: "Звонок", activityNote: "" });
   const viewportRef = useRef<HTMLDivElement>(null);
   const active = tabs.find(tab => tab.id === activeTab) ?? null;
 
@@ -241,13 +242,20 @@ function App() {
     notify("История очищена");
   };
 
-  const resetForm = () => setForm({ company: "", website: "", contact: "", email: "", phone: "", location: "Москва и Московская область", nextAction: "", followUpDate: "", industry: "Строительство", status: "Новый", source: "Сайт компании", notes: "" });
+  const resetForm = () => setForm({ company: "", website: "", contact: "", email: "", phone: "", location: "Москва и Московская область", nextAction: "", followUpDate: "", industry: "Строительство", status: "Новый", source: "Сайт компании", notes: "", tags: "", activityType: "Звонок", activityNote: "" });
 
   const saveForm = async () => {
     if (!form.company.trim()) { notify("Укажите название компании"); return; }
+    const { tags, activityType, activityNote, ...fields } = form;
+    const nextActivity = activityNote.trim()
+      ? [{ id: makeId(), date: new Date().toISOString(), type: activityType, note: activityNote.trim() }, ...(editing?.activity ?? [])]
+      : (editing?.activity ?? []);
     const item: Prospect = {
-      ...form, id: editing?.id ?? makeId(), company: form.company.trim(),
-      website: form.website.trim(), createdAt: editing?.createdAt ?? new Date().toISOString()
+      ...fields, id: editing?.id ?? makeId(), company: form.company.trim(),
+      website: form.website.trim(),
+      tags: [...new Set(tags.split(/[;,]/).map(tag => tag.trim()).filter(Boolean))].slice(0, 20),
+      activity: nextActivity.slice(0, 100),
+      createdAt: editing?.createdAt ?? new Date().toISOString()
     };
     const next = editing ? prospects.map(p => p.id === editing.id ? item : p) : [item, ...prospects];
     await persistProspects(next);
@@ -257,14 +265,14 @@ function App() {
 
   const editProspect = (item: Prospect) => {
     setEditing(item);
-    setForm({ company: item.company, website: item.website, contact: item.contact, email: item.email, phone: item.phone, location: item.location || "", nextAction: item.nextAction || "", followUpDate: item.followUpDate || "", industry: item.industry, status: item.status, source: item.source, notes: item.notes });
+    setForm({ company: item.company, website: item.website, contact: item.contact, email: item.email, phone: item.phone, location: item.location || "", nextAction: item.nextAction || "", followUpDate: item.followUpDate || "", industry: item.industry, status: item.status, source: item.source, notes: item.notes, tags: (item.tags ?? []).join(", "), activityType: "Звонок", activityNote: "" });
     setShowAdd(true);
   };
 
   const exportCsv = () => {
-    const headers = ["Компания", "Сайт", "Контакт", "Email", "Телефон", "Регион", "Следующий шаг", "Дата контакта", "Отрасль", "Статус", "Источник", "Заметки", "Дата добавления"];
+    const headers = ["Компания", "Сайт", "Контакт", "Email", "Телефон", "Регион", "Следующий шаг", "Дата контакта", "Отрасль", "Статус", "Источник", "Заметки", "Метки", "Дата добавления"];
     const quote = (v: unknown) => '"' + String(v ?? "").replace(/"/g, '""') + '"';
-    const lines = [headers, ...filtered.map(p => [p.company, p.website, p.contact, p.email, p.phone, p.location, p.nextAction, p.followUpDate, p.industry, p.status, p.source, p.notes, p.createdAt])].map(row => row.map(quote).join(";"));
+    const lines = [headers, ...filtered.map(p => [p.company, p.website, p.contact, p.email, p.phone, p.location, p.nextAction, p.followUpDate, p.industry, p.status, p.source, p.notes, (p.tags ?? []).join(", "), p.createdAt])].map(row => row.map(quote).join(";"));
     const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = "nexus-prospects.csv"; a.click(); URL.revokeObjectURL(url);
@@ -280,7 +288,7 @@ function App() {
         const key = item.company.trim().toLowerCase() + "|" + item.website.trim().toLowerCase();
         if (existing.has(key)) continue;
         existing.add(key);
-        added.push({ ...item, id: makeId() });
+        added.push({ ...item, id: makeId(), tags: item.tags ?? [], activity: [] });
       }
       await persistProspects([...added, ...prospects]);
       notify(`Импортировано компаний: ${added.length}; пропущено дублей: ${parsed.length - added.length}`);
@@ -291,7 +299,7 @@ function App() {
 
   const filtered = useMemo(() => prospects.filter(p => {
     const q = prospectQuery.toLowerCase().trim();
-    const matches = !q || [p.company, p.website, p.contact, p.email, p.phone, p.location, p.nextAction, p.industry, p.notes].some(v => (v || "").toLowerCase().includes(q));
+    const matches = !q || [p.company, p.website, p.contact, p.email, p.phone, p.location, p.nextAction, p.industry, p.notes, ...(p.tags ?? [])].some(v => (v || "").toLowerCase().includes(q));
     const today = localDateKey();
     const dateMatches = statusFilter === "Просрочен контакт"
       ? Boolean(p.followUpDate && p.followUpDate < today && p.status !== "Не подходит")
@@ -405,8 +413,17 @@ function App() {
           <label className="field"><span>Следующий шаг</span><input value={form.nextAction} onChange={e => setForm(p => ({ ...p, nextAction: e.target.value }))} placeholder="Позвонить, отправить КП…"/></label>
           <label className="field"><span>Дата следующего контакта</span><input type="date" value={form.followUpDate} onChange={e => setForm(p => ({ ...p, followUpDate: e.target.value }))}/></label>
           <label className="field"><span>Статус</span><select value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value as Prospect["status"] }))}><option>Новый</option><option>В работе</option><option>Приоритет</option><option>Не подходит</option></select></label>
+          <label className="field full"><span>Метки</span><input value={form.tags} onChange={e => setForm(p => ({ ...p, tags: e.target.value }))} placeholder="Например: генподрядчик, крупный объект, тендер (через запятую)"/></label>
           <label className="field full"><span>Источник информации</span><input value={form.source} onChange={e => setForm(p => ({ ...p, source: e.target.value }))} placeholder="Сайт, каталог, рекомендация…"/></label>
-          <label className="field full"><span>Заметки</span><textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={3} placeholder="Чем занимается компания, потенциальная потребность…"/></label>
+          <label className="field full"><span>Заметки о компании</span><textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={3} placeholder="Чем занимается компания, потенциальная потребность…"/></label>
+          <div className="activity-editor full">
+            <div className="activity-editor-heading"><b>История взаимодействия</b><span>{editing?.activity?.length ?? 0} записей</span></div>
+            {(editing?.activity ?? []).length > 0 && <div className="activity-timeline">{(editing?.activity ?? []).slice(0, 8).map(entry => <div className="activity-entry" key={entry.id}><span className="activity-entry-dot"/><div><b>{entry.type}</b><time>{new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(entry.date))}</time><p>{entry.note}</p></div></div>)}</div>}
+            <div className="activity-entry-form">
+              <label className="field"><span>Тип контакта</span><select value={form.activityType} onChange={e => setForm(p => ({ ...p, activityType: e.target.value }))}><option>Звонок</option><option>Письмо</option><option>Встреча</option><option>Сообщение</option><option>Другое</option></select></label>
+              <label className="field"><span>Добавить запись (необязательно)</span><textarea value={form.activityNote} onChange={e => setForm(p => ({ ...p, activityNote: e.target.value }))} rows={2} placeholder="С кем говорили, о чём договорились, следующий результат…"/></label>
+            </div>
+          </div>
         </div>
         <div className="modal-footer"><span className="privacy-note"><ShieldCheck size={14}/> Сохраняется локально</span><div><button className="button button-ghost" onClick={() => setShowAdd(false)}>Отмена</button><button className="button button-primary" onClick={() => void saveForm()}><Check size={16}/> Сохранить компанию</button></div></div>
       </div>
@@ -493,7 +510,7 @@ function ProspectsPage({ prospects, query, setQuery, statusFilter, setStatusFilt
   return <div className="standard-page"><PageHeader eyebrow="УПРАВЛЕНИЕ ПРОДАЖАМИ" title="База компаний" description="Единый список потенциальных клиентов, контактов и источников." action={<button className="button button-primary" onClick={onAdd}><Plus size={16}/> Добавить компанию</button>}/>
     <div className="table-toolbar"><div className="table-search"><Search size={16}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Поиск по компании, сайту, контакту…"/></div><div className="table-filters"><Filter size={15}/><select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option>Все статусы</option><option>Новый</option><option>В работе</option><option>Приоритет</option><option>Не подходит</option><option>Просрочен контакт</option><option>Контакт сегодня</option><option>Контакт в ближайшие 7 дней</option></select><label className="button button-secondary import-button"><ArrowDownToLine size={15}/> Импорт CSV<input type="file" accept=".csv,text/csv" onChange={e => { const file = e.target.files?.[0]; if (file) onImport(file); e.currentTarget.value = ""; }}/></label><button className="button button-secondary" onClick={onExport}><Download size={15}/> Экспорт CSV</button></div></div>
     <div className="panel table-panel"><div className="table-count"><span>Компании <b>{prospects.length}</b></span><span>Локальная база <span className="status-light"/></span></div>
-      {prospects.length === 0 ? <div className="empty-state"><div className="empty-icon"><Users size={24}/></div><h3>Пока нет компаний</h3><p>Добавьте первую компанию вручную или сохраните её с открытого сайта. Записи будут доступны после перезапуска.</p><button className="button button-primary" onClick={onAdd}><Plus size={16}/> Добавить первую компанию</button></div> : <div className="table-scroll"><table><thead><tr><th>Компания</th><th>Регион</th><th>Отрасль</th><th>Контактные данные</th><th>Следующий шаг</th><th>Источник</th><th>Статус</th><th></th></tr></thead><tbody>{prospects.map(p => <tr key={p.id}><td><div className="table-company"><div className="company-monogram">{p.company.slice(0,1).toUpperCase()}</div><div><b>{p.company}</b>{p.website && <a href="#" onClick={e => { e.preventDefault(); onOpen(p.website); }}>{shortHost(p.website)}</a>}</div></div></td><td>{p.location || "—"}</td><td>{p.industry || "—"}</td><td><div className="contact-cell">{p.contact && <span>{p.contact}</span>}{p.email && <span>{p.email}</span>}{p.phone && <span>{p.phone}</span>}{!p.contact && !p.email && !p.phone && "—"}</div></td><td><div className="contact-cell">{p.nextAction && <span>{p.nextAction}</span>}{p.followUpDate && <small className={p.followUpDate < new Date().toISOString().slice(0, 10) ? "follow-up overdue" : "follow-up"}>{p.followUpDate}</small>}{!p.nextAction && !p.followUpDate && "—"}</div></td><td>{p.source || "—"}</td><td><select className="status-select" aria-label={`Статус компании ${p.company}`} value={p.status} onChange={e => onStatusChange(p, e.target.value as Prospect["status"])}><option>Новый</option><option>В работе</option><option>Приоритет</option><option>Не подходит</option></select></td><td><div className="row-actions"><button className="icon-button" title="Редактировать" onClick={() => onEdit(p)}><Settings2 size={15}/></button><button className="icon-button danger-hover" title="Удалить" onClick={() => onDelete(p.id)}><Trash2 size={15}/></button></div></td></tr>)}</tbody></table></div>}
+      {prospects.length === 0 ? <div className="empty-state"><div className="empty-icon"><Users size={24}/></div><h3>Пока нет компаний</h3><p>Добавьте первую компанию вручную или сохраните её с открытого сайта. Записи будут доступны после перезапуска.</p><button className="button button-primary" onClick={onAdd}><Plus size={16}/> Добавить первую компанию</button></div> : <div className="table-scroll"><table><thead><tr><th>Компания</th><th>Метки</th><th>Регион</th><th>Отрасль</th><th>Контактные данные</th><th>Следующий шаг</th><th>Источник</th><th>Статус</th><th></th></tr></thead><tbody>{prospects.map(p => <tr key={p.id}><td><div className="table-company"><div className="company-monogram">{p.company.slice(0,1).toUpperCase()}</div><div><b>{p.company}</b>{p.website && <a href="#" onClick={e => { e.preventDefault(); onOpen(p.website); }}>{shortHost(p.website)}</a>}</div></div></td><td><div className="tag-list">{(p.tags ?? []).length ? (p.tags ?? []).map(tag => <span className="tag-chip" key={tag}>{tag}</span>) : "—"}</div></td><td>{p.location || "—"}</td><td>{p.industry || "—"}</td><td><div className="contact-cell">{p.contact && <span>{p.contact}</span>}{p.email && <span>{p.email}</span>}{p.phone && <span>{p.phone}</span>}{!p.contact && !p.email && !p.phone && "—"}</div></td><td><div className="contact-cell">{p.nextAction && <span>{p.nextAction}</span>}{p.followUpDate && <small className={p.followUpDate < new Date().toISOString().slice(0, 10) ? "follow-up overdue" : "follow-up"}>{p.followUpDate}</small>}{!p.nextAction && !p.followUpDate && "—"}</div></td><td>{p.source || "—"}</td><td><select className="status-select" aria-label={`Статус компании ${p.company}`} value={p.status} onChange={e => onStatusChange(p, e.target.value as Prospect["status"])}><option>Новый</option><option>В работе</option><option>Приоритет</option><option>Не подходит</option></select></td><td><div className="row-actions"><button className="icon-button" title="Редактировать" onClick={() => onEdit(p)}><Settings2 size={15}/></button><button className="icon-button danger-hover" title="Удалить" onClick={() => onDelete(p.id)}><Trash2 size={15}/></button></div></td></tr>)}</tbody></table></div>}
     </div>
   </div>;
 }
