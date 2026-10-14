@@ -152,3 +152,27 @@ export function validateFinanceEntry(value: unknown): JsonRecord {
   }
   return { ...item, id, title };
 }
+
+export function validateSupplier(value: unknown): JsonRecord {
+  const item = requireRecord(value, "Поставщик");
+  const id = requireString(item.id, "id", 200).trim();
+  const name = requireString(item.name, "name", 500).trim();
+  if (!id || !name) throw new Error("У поставщика должны быть id и название");
+  for (const field of ["category", "contact", "phone", "email", "website", "region", "paymentTerms", "status", "notes", "createdAt", "updatedAt"]) {
+    if (item[field] !== undefined) requireString(item[field], field, 5000);
+  }
+  if (item.website) {
+    const website = String(item.website);
+    if (!/^https?:\/\//i.test(website)) throw new Error("Сайт поставщика должен начинаться с HTTP или HTTPS");
+  }
+  const deliveryDays = item.deliveryDays ?? 0;
+  if (typeof deliveryDays !== "number" || !Number.isInteger(deliveryDays) || deliveryDays < 0 || deliveryDays > 3650) {
+    throw new Error("Срок поставки должен быть целым числом дней от 0 до 3650");
+  }
+  const rating = item.rating ?? 0;
+  if (typeof rating !== "number" || !Number.isFinite(rating) || rating < 0 || rating > 5) {
+    throw new Error("Оценка поставщика должна быть от 0 до 5");
+  }
+  if (item.status !== undefined && !["Активен", "На паузе"].includes(String(item.status))) throw new Error("Некорректный статус поставщика");
+  return { ...item, id, name, deliveryDays, rating };
+}
