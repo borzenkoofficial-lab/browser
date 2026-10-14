@@ -59,7 +59,6 @@ function App() {
   const historyRef = useRef<HistoryItem[]>(history);
   const historySaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   activeTabRef.current = activeTab;
-  historyRef.current = history;
   const active = tabs.find(tab => tab.id === activeTab) ?? null;
 
   const notify = (message: string) => {
@@ -358,14 +357,19 @@ function App() {
 
   const clearHistory = async () => {
     if (!confirm("Очистить историю посещений?")) return;
-    try {
-      await window.nexus.saveHistory([]);
-      historyRef.current = [];
-      setHistory([]);
-      notify("История очищена");
-    } catch {
+    historySaveQueueRef.current = historySaveQueueRef.current.then(async () => {
+      try {
+        await window.nexus.saveHistory([]);
+        historyRef.current = [];
+        setHistory([]);
+        notify("История очищена");
+      } catch {
+        notify("Не удалось очистить историю. Данные не изменены.");
+      }
+    }).catch(() => {
       notify("Не удалось очистить историю. Данные не изменены.");
-    }
+    });
+    await historySaveQueueRef.current;
   };
 
   const resetForm = () => setForm({ company: "", website: "", contact: "", email: "", phone: "", location: "Москва и Московская область", nextAction: "", followUpDate: "", industry: "Строительство", status: "Новый", source: "Сайт компании", notes: "", tags: "", activityType: "Звонок", activityNote: "" });
