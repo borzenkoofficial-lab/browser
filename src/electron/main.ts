@@ -1,0 +1,128 @@
+import { app, BrowserWindow, WebContentsView, ipcMain, shell } from "electron";
+import path from "node:path";
+import fs from "node:fs/promises";
+
+const isDev = !app.isPackaged;
+let mainWindow: BrowserWindow | null = null;
+const browserViews = new Map<string, WebContentsView>();
+const viewBounds = new Map<string, { x: number; y: number; width: number; height: number }>();
+const dataFile = () => path.join(app.getPath("userData"), "prospects.json");
+
+async function readProspects(): Promise<unknown[]> {
+  try { return JSON.parse(await fs.readFile(dataFile(), "utf8")) as unknown[]; }
+  catch { return []; }
+}
+async function writeProspects(value: unknown[]): Promise<void> {
+  await fs.mkdir(path.dirname(dataFile()), { recursive: true });
+  await fs.writeFile(dataFile(), JSON.stringify(value, null, 2), "utf8");
+}
+
+function createWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1500, height: 940, minWidth: 1080, minHeight: 700,
+    backgroundColor: "#10131a",
+    title: "NEXUS Business Browser",
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  });
+  if (isDev) void mainWindow.loadURL("http://127.0.0.1:5173");
+  else void mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
+  mainWindow.on("resize", syncActiveBounds);
+  mainWindow.on("closed", () => { mainWindow = null; });
+}
+
+function syncActiveBounds() {
+  if (!mainWindow) return;
+  for (const [id, view] of browserViews) {
+    const bounds = viewBounds.get(id);
+    if (bounds) view.setBounds(bounds);
+  }
+}
+
+function validUrl(input: string): string {
+  const value = input.trim();
+  if (!value) return "https://www.google.com";
+  if (/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(value)) {
+    const parsed = new URL(value);
+    if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("Разрешены только HTTP и HTTPS");
+    return parsed.toString();
+  }
+  if (value.includes(".") && !value.includes(" ")) return "https://" + value;
+  return "https://www.google.com/search?q=" + encodeURIComponent(value);
+}
+
+ipcMain.handle("browser:create", async (_event, id: string, initialUrl?: string) => {
+  if (!mainWindow || browserViews.has(id)) return;
+  const view = new WebContentsView({
+    webPreferences: {
+      contextIsolation: true, nodeIntegration: false, sandbox: true,
+      partition: "persist:nexus-browser"
+    }
+  });
+  browserViews.set(id, view);
+  mainWindow.contentView.addChildView(view);
+  view.setBounds(viewBounds.get(id) ?? { x: 0, y: 150, width: 900, height: 600 });
+  view.webContents.setWindowOpenHandler(({ url }) => {
+    void shell.openExternal(url);
+    return { action: "deny" };
+  });
+  view.webContents.on("page-title-updated", (_e, title) => mainWindow?.webContents.send("browser:title", { id, title }));
+  view.webContents.on("did-navigate", (_e, url) => mainWindow?.webContents.send("browser:navigate", { id, url }));
+  view.webContents.on("did-navigate-in-page", (_e, url) => mainWindow?.webContents.send("browser:navigate", { id, url }));
+  view.webContents.on("did-fail-load", (_e, code, description, url, isMainFrame) => {
+    if (isMainFrame && code !== -3) mainWindow?.webContents.send("browser:error", { id, code, description, url });
+  });
+  await view.webContents.loadURL(validUrl(initialUrl ?? "https://www.google.com"));
+});
+
+ipcMain.handle("browser:navigate", async (_event, id: string, url: string) => {
+  const view = browserViews.get(id);
+  if (view) await view.webContents.loadURL(validUrl(url));
+});
+ipcMain.handle("browser:back", (_event, id: string) => {
+  const view = browserViews.get(id);
+  if (view?.webContents.navigationHistory.canGoBack()) view.webContents.navigationHistory.goBack();
+});
+ipcMain.handle("browser:forward", (_event, id: string) => {
+  const view = browserViews.get(id);
+  if (view?.webContents.navigationHistory.canGoForward()) view.webContents.navigationHistory.goForward();
+});
+ipcMain.handle("browser:reload", (_event, id: string) => browserViews.get(id)?.webContents.reload());
+ipcMain.handle("browser:bounds", (_event, id: string, bounds: { x: number; y: number; width: number; height: number } | null) => {
+  if (!bounds) {
+    viewBounds.delete(id);
+    const view = browserViews.get(id);
+    if (view && mainWindow) mainWindow.contentView.removeChildView(view);
+    return;
+  }
+  viewBounds.set(id, bounds);
+  const view = browserViews.get(id);
+  if (view && mainWindow) {
+    if (!mainWindow.contentView.children.includes(view)) mainWindow.contentView.addChildView(view);
+    view.setBounds(bounds);
+  }
+});
+ipcMain.handle("browser:close", (_event, id: string) => {
+  const view = browserViews.get(id);
+  if (view) {
+    if (mainWindow) mainWindow.contentView.removeChildView(view);
+    view.webContents.close();
+    browserViews.delete(id);
+    viewBounds.delete(id);
+  }
+});
+ipcMain.handle("browser:state", (_event, id: string) => {
+  const view = browserViews.get(id);
+  if (!view) return null;
+  return { url: view.webContents.getURL(), title: view.webContents.getTitle(), loading: view.webContents.isLoading() };
+});
+ipcMain.handle("prospects:list", readProspects);
+ipcMain.handle("prospects:save", async (_event, records: unknown[]) => { await writeProspects(records); return true; });
+ipcMain.handle("app:version", () => app.getVersion());
+app.whenReady().then(createWindow);
+app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
