@@ -10,7 +10,10 @@ The current codebase is an early MVP foundation. It combines a Chromium-powered 
 - Address/search bar with HTTP(S)-only URL validation
 - Back, forward, reload, tab creation and tab closing
 - Local browser bookmarks and visit history
-- Local prospect records persisted in the Electron user-data directory
+- Local prospect records, bookmarks and visit history persisted in SQLite in the Electron user-data directory
+- One-time migration from the previous JSON files, with original files retained and copied to `backups/pre-sqlite`
+- Validated repository operations and SQLite integrity checks
+- User-triggered SQLite backup and restore from Settings, with a safety backup before restore
 - Company cards with industry, contact details, status, source and notes
 - Explicit user-triggered extraction of page title, meta description, visible text, email and phone candidates to prefill a company card
 - Search workflow for construction, contractors, property managers and other B2B categories
@@ -37,7 +40,9 @@ The Windows installer is generated under `release/`. The GitHub Actions workflow
 
 ## Local data
 
-Prospects, bookmarks and history are stored under Electron's application user-data directory. No application server or paid AI provider is required for the current MVP.
+Prospects, bookmarks and history are stored in `nexus.sqlite` under Electron's application user-data directory. On first startup after this update, the application copies any legacy `prospects.json`, `bookmarks.json` and `history.json` files to `backups/pre-sqlite` and imports their records into SQLite. The original JSON files are not deleted. If legacy data cannot be parsed, startup stops with an error rather than silently treating the file as empty.
+
+Use Settings → Backup to create a verified `.sqlite` backup, or restore from an existing backup. Before restoration, the application creates a safety backup of the current database. Keep backup files in a safe location. No application server or paid AI provider is required.
 
 ## Current limitations
 
