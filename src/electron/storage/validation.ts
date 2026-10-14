@@ -161,9 +161,22 @@ export function validateSupplier(value: unknown): JsonRecord {
   for (const field of ["category", "contact", "phone", "email", "website", "region", "paymentTerms", "status", "notes", "createdAt", "updatedAt"]) {
     if (item[field] !== undefined) requireString(item[field], field, 5000);
   }
-  if (item.website) {
-    const website = String(item.website);
-    if (!/^https?:\/\//i.test(website)) throw new Error("Сайт поставщика должен начинаться с HTTP или HTTPS");
+  if (item.email !== undefined && String(item.email).trim()) {
+    const email = String(item.email).trim();
+    if (email.length > 320 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new Error("Укажите корректный email поставщика");
+    }
+    item.email = email;
+  }
+  if (item.website !== undefined && String(item.website).trim()) {
+    const website = String(item.website).trim();
+    let parsed: URL;
+    try { parsed = new URL(website); }
+    catch { throw new Error("Укажите корректный сайт поставщика с HTTP или HTTPS"); }
+    if (!["http:", "https:"].includes(parsed.protocol) || !parsed.hostname.includes(".")) {
+      throw new Error("Сайт поставщика должен быть корректным HTTP(S) URL");
+    }
+    item.website = website;
   }
   const deliveryDays = item.deliveryDays ?? 0;
   if (typeof deliveryDays !== "number" || !Number.isInteger(deliveryDays) || deliveryDays < 0 || deliveryDays > 3650) {
