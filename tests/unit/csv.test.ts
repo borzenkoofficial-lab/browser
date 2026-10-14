@@ -28,6 +28,13 @@ describe("prospect CSV import", () => {
     expect(rows[0].followUpDate).toBe("2026-10-20");
   });
 
+  it("normalizes Russian date formats and rejects invalid follow-up dates", () => {
+    expect(parseProspectsCsv("Компания;Дата контакта\nООО Строй;20.10.2026")[0].followUpDate).toBe("2026-10-20");
+    expect(parseProspectsCsv("Компания;Дата контакта\nООО Строй;31/12/2026")[0].followUpDate).toBe("2026-12-31");
+    expect(() => parseProspectsCsv("Компания;Дата контакта\nООО Строй;2026-02-30")).toThrow(/несуществующая дата.*строке 2/i);
+    expect(() => parseProspectsCsv("Компания;Дата контакта\nООО Строй;в пятницу")).toThrow(/некорректная дата.*строке 2/i);
+  });
+
   it("imports prospect tags from Russian and English CSV headers", () => {
     const rows = parseProspectsCsv('Компания;Метки\nООО Строй;"генподрядчик, тендер"');
     expect(rows[0].tags).toEqual(["генподрядчик", "тендер"]);
