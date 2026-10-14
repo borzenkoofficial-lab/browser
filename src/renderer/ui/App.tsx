@@ -535,6 +535,72 @@ function ProspectsPage({ prospects, query, setQuery, statusFilter, setStatusFilt
   </div>;
 }
 
+
+const createBlankEstimate = (): Estimate => {
+  const now = new Date().toISOString();
+  return {
+    id: makeId(), title: "Новая смета", customer: "", object: "", status: "Черновик", notes: "",
+    items: [{ id: makeId(), name: "Демонтаж стен", unit: "м²", quantity: 1, price: 0, cost: 0 }],
+    createdAt: now, updatedAt: now
+  };
+};
+
+function EstimatesPage({ estimates, onSave, onDelete }: { estimates: Estimate[]; onSave: (item: Estimate) => void; onDelete: (id: string) => void }) {
+  const [activeId, setActiveId] = useState("new");
+  const [draft, setDraft] = useState<Estimate>(() => createBlankEstimate());
+  const money = (value: number) => new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", maximumFractionDigits: 2 }).format(value);
+  useEffect(() => {
+    if (activeId === "new") return;
+    const current = estimates.find(item => item.id === activeId);
+    if (current) setDraft({ ...current, items: current.items.map(line => ({ ...line })) });
+  }, [activeId, estimates]);
+  const revenue = draft.items.reduce((sum, item) => sum + item.quantity * item.price, 0);
+  const cost = draft.items.reduce((sum, item) => sum + item.quantity * item.cost, 0);
+  const profit = revenue - cost;
+  const margin = revenue > 0 ? profit / revenue * 100 : 0;
+  const updateLine = (id: string, patch: Partial<EstimateLine>) => setDraft(previous => ({ ...previous, items: previous.items.map(item => item.id === id ? { ...item, ...patch } : item) }));
+  const save = () => {
+    if (!draft.title.trim()) { alert("Укажите название сметы"); return; }
+    if (!draft.items.length) { alert("Добавьте хотя бы одну позицию"); return; }
+    if (draft.items.some(item => !item.name.trim() || !Number.isFinite(item.quantity) || !Number.isFinite(item.price) || !Number.isFinite(item.cost) || item.quantity < 0 || item.price < 0 || item.cost < 0)) {
+      alert("Проверьте названия позиций, объёмы, цены и себестоимость.");
+      return;
+    }
+    const item = { ...draft, title: draft.title.trim(), updatedAt: new Date().toISOString() };
+    onSave(item);
+    setActiveId(item.id);
+  };
+  return <div className="standard-page estimates-page">
+    <PageHeader eyebrow="РАСЧЁТЫ И ЭКОНОМИКА" title="Сметы и прибыль" description="Рассчитывайте цену заказчику, прямые затраты и маржинальность по каждой позиции. Все расчёты сохраняются локально." action={<button className="button button-primary" onClick={() => { setDraft(createBlankEstimate()); setActiveId("new"); }}><Plus size={16}/> Новая смета</button>}/>
+    <div className="estimates-layout">
+      <aside className="panel estimates-list-panel"><div className="panel-heading"><div><h3>Сохранённые сметы</h3><p>{estimates.length} документов</p></div><Calculator size={18}/></div>
+        {estimates.length ? <div className="estimate-list">{estimates.slice().sort((a,b) => b.updatedAt.localeCompare(a.updatedAt)).map(item => <button key={item.id} className={activeId === item.id ? "estimate-list-item active" : "estimate-list-item"} onClick={() => setActiveId(item.id)}><span className="estimate-list-icon"><Calculator size={15}/></span><span className="estimate-list-copy"><b>{item.title}</b><small>{item.customer || item.object || "Без заказчика"}</small><small>{new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(item.updatedAt))}</small></span><strong>{money(item.items.reduce((sum,line) => sum + line.quantity * line.price, 0))}</strong></button>)}</div> : <div className="estimate-empty">Сохранённых смет пока нет. Создайте первую — она появится в этом списке.</div>}
+      </aside>
+      <section className="estimate-editor">
+        <div className="panel estimate-details-panel">
+          <div className="estimate-editor-top"><div><span className="eyebrow">РАБОЧИЙ ДОКУМЕНТ</span><h2>{activeId === "new" ? "Новая смета" : "Редактирование сметы"}</h2></div><select aria-label="Статус сметы" value={draft.status} onChange={e => setDraft(p => ({ ...p, status: e.target.value as Estimate["status"] }))}><option>Черновик</option><option>КП подготовлено</option><option>Согласовано</option></select></div>
+          <div className="estimate-meta-grid">
+            <label className="field"><span>Название сметы *</span><input value={draft.title} onChange={e => setDraft(p => ({ ...p, title: e.target.value }))} placeholder="Демонтаж офиса — этап 1"/></label>
+            <label className="field"><span>Заказчик</span><input value={draft.customer} onChange={e => setDraft(p => ({ ...p, customer: e.target.value }))} placeholder="Компания или контакт"/></label>
+            <label className="field"><span>Объект</span><input value={draft.object} onChange={e => setDraft(p => ({ ...p, object: e.target.value }))} placeholder="Адрес / название объекта"/></label>
+            <label className="field"><span>Комментарий</span><input value={draft.notes} onChange={e => setDraft(p => ({ ...p, notes: e.target.value }))} placeholder="Условия, вывоз, ограничения"/></label>
+          </div>
+        </div>
+        <div className="panel estimate-lines-panel"><div className="panel-heading"><div><h3>Позиции расчёта</h3><p>Цена и себестоимость задаются за единицу измерения</p></div><button className="button button-secondary" onClick={() => setDraft(p => ({ ...p, items: [...p.items, { id: makeId(), name: "", unit: "м²", quantity: 0, price: 0, cost: 0 }] }))}><Plus size={14}/> Добавить позицию</button></div>
+          <div className="estimate-lines-scroll"><table className="estimate-lines-table"><thead><tr><th>Работа / материал</th><th>Ед.</th><th>Объём</th><th>Цена за ед.</th><th>Затраты за ед.</th><th>Сумма</th><th></th></tr></thead><tbody>{draft.items.map(line => <tr key={line.id}><td><input aria-label="Название позиции" value={line.name} onChange={e => updateLine(line.id, { name: e.target.value })} placeholder="Например, снятие стяжки"/></td><td><input aria-label="Единица измерения" value={line.unit} onChange={e => updateLine(line.id, { unit: e.target.value })} placeholder="м²"/></td><td><input aria-label="Объём" type="number" min="0" step="0.01" value={line.quantity} onChange={e => updateLine(line.id, { quantity: Number(e.target.value) })}/></td><td><input aria-label="Цена за единицу" type="number" min="0" step="0.01" value={line.price} onChange={e => updateLine(line.id, { price: Number(e.target.value) })}/></td><td><input aria-label="Себестоимость за единицу" type="number" min="0" step="0.01" value={line.cost} onChange={e => updateLine(line.id, { cost: Number(e.target.value) })}/></td><td className="estimate-line-total">{money(line.quantity * line.price)}</td><td><button className="icon-button danger-hover" title="Удалить позицию" disabled={draft.items.length === 1} onClick={() => setDraft(p => ({ ...p, items: p.items.filter(item => item.id !== line.id) }))}><Trash2 size={14}/></button></td></tr>)}</tbody></table></div>
+        </div>
+        <div className="estimate-summary-grid">
+          <div className="estimate-total-card"><span>Цена заказчику</span><strong>{money(revenue)}</strong><small>Сумма всех позиций</small></div>
+          <div className="estimate-total-card"><span>Прямые затраты</span><strong>{money(cost)}</strong><small>Себестоимость работ</small></div>
+          <div className={profit < 0 ? "estimate-total-card negative" : "estimate-total-card positive"}><span>Валовая прибыль</span><strong>{money(profit)}</strong><small>Без учёта налогов и накладных расходов</small></div>
+          <div className={margin < 15 ? "estimate-total-card negative" : "estimate-total-card positive"}><span>Маржинальность</span><strong>{margin.toLocaleString("ru-RU", { maximumFractionDigits: 1 })}%</strong><small>{revenue === 0 ? "Введите цену для расчёта" : margin < 15 ? "Низкая маржа — проверьте цену и затраты" : "Расчётная маржа по прямым затратам"}</small></div>
+        </div>
+        <div className="estimate-editor-actions"><span><ShieldCheck size={14}/> Локальное сохранение · Без учёта налогов и накладных расходов</span><div>{activeId !== "new" && <button className="button button-danger" onClick={() => { onDelete(draft.id); setDraft(createBlankEstimate()); setActiveId("new"); }}><Trash2 size={14}/> Удалить</button>}<button className="button button-primary" onClick={save}><Check size={15}/> Сохранить смету</button></div></div>
+      </section>
+    </div>
+  </div>;
+}
+
 function StatusBadge({ status }: { status: Prospect["status"] }) {
   const className = status === "Приоритет" ? "priority" : status === "В работе" ? "in-progress" : status === "Не подходит" ? "rejected" : "new";
   return <span className={`status-badge ${className}`}><span/>{status}</span>;
