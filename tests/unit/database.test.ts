@@ -159,6 +159,29 @@ describe("SQLite repository storage", () => {
     expect(listRecords("objects")).toEqual([]);
   });
 
+  it("stores finance entries and restores them from a backup", async () => {
+    await setup();
+    const entry = {
+      id: "f1", type: "Доход", title: "Аванс по договору", category: "Аванс", amount: 85000,
+      date: "2026-10-14", status: "Оплачено", counterparty: "ООО Заказчик", objectId: "o1",
+      notes: "Поступило на счёт", createdAt: "2026-10-14T10:00:00.000Z", updatedAt: "2026-10-14T10:00:00.000Z"
+    };
+    replaceRecords("finance", [entry]);
+    expect(listRecords("finance")).toEqual([entry]);
+    const backupPath = path.join(tempDir, "backups", "finance.sqlite");
+    expect((await createBackup(backupPath)).integrity).toBe("ok");
+    replaceRecords("finance", []);
+    await restoreBackup(backupPath);
+    expect(listRecords("finance")).toEqual([entry]);
+  });
+
+  it("rejects negative finance amounts and invalid operation types", async () => {
+    await setup();
+    expect(() => replaceRecords("finance", [{ id: "f2", type: "Кредит", title: "Некорректно", amount: 10, status: "План" }])).toThrow(/Доход|Расход/);
+    expect(() => replaceRecords("finance", [{ id: "f3", type: "Расход", title: "Некорректно", amount: -1, status: "План" }])).toThrow(/Сумма операции/);
+    expect(listRecords("finance")).toEqual([]);
+  });
+
   it("creates and restores a verified backup", async () => {
     await setup();
     replaceRecords("prospects", [{ id: "p1", company: "Исходная компания" }]);
