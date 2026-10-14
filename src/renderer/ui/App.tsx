@@ -114,11 +114,17 @@ function App() {
     setSection("home");
     setAddress(url);
     setPageError("");
-    await window.nexus.createTab(id, url);
-    requestAnimationFrame(() => {
-      const rect = viewportRef.current?.getBoundingClientRect();
-      if (rect) void window.nexus.setBounds(id, { x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) });
-    });
+    try {
+      await window.nexus.createTab(id, url);
+      requestAnimationFrame(() => {
+        const rect = viewportRef.current?.getBoundingClientRect();
+        if (rect) void window.nexus.setBounds(id, { x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) });
+      });
+    } catch (error) {
+      setTabs(prev => prev.filter(item => item.id !== id));
+      setActiveTab(null);
+      notify(error instanceof Error ? error.message : "Не удалось открыть страницу");
+    }
   };
 
   const closeTab = async (id: string) => {
@@ -134,18 +140,22 @@ function App() {
 
   const navigate = async (value = address) => {
     if (!value.trim()) return;
-    let id = activeTab;
-    if (!id) {
-      id = makeId();
-      setTabs(prev => [...prev, { id: id!, title: "Поиск", url: value }]);
-      setActiveTab(id);
-      await window.nexus.createTab(id, value);
-    } else {
-      await window.nexus.navigate(id, value);
+    try {
+      let id = activeTab;
+      if (!id) {
+        id = makeId();
+        setTabs(prev => [...prev, { id: id!, title: "Поиск", url: value }]);
+        setActiveTab(id);
+        await window.nexus.createTab(id, value);
+      } else {
+        await window.nexus.navigate(id, value);
+      }
+      setSection("home");
+      setPageError("");
+      setAddress(value);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Не удалось открыть адрес");
     }
-    setSection("home");
-    setPageError("");
-    setAddress(value);
   };
 
   const saveCurrentSite = async () => {
