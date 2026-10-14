@@ -666,17 +666,25 @@ function Research({ onSearch, onSave }: { onSearch: (q: string, source?: string)
   const [region, setRegion] = useState("Москва и Московская область");
   const [keywords, setKeywords] = useState("");
   const [source, setSource] = useState("Веб-поиск");
-  const run = () => {
-    const q = [sector, region, keywords].filter(Boolean).join(" ");
-    onSearch(q, source);
+  const [intent, setIntent] = useState("Официальные сайты");
+  const intentTerms: Record<string, string> = {
+    "Официальные сайты": "официальный сайт компании",
+    "Контакты": "контакты телефон email",
+    "Тендеры и закупки": "тендеры закупки подряд",
+    "Поиск заказчиков": "заказчик коммерческие объекты строительство",
+    "Партнёры и подрядчики": "партнёр подрядчик генподрядчик"
   };
+  const query = [sector, region, keywords.trim(), intentTerms[intent]].filter(Boolean).join(" ");
+  const run = () => onSearch(query, source);
   return <div className="standard-page"><PageHeader eyebrow="ИССЛЕДОВАНИЕ РЫНКА" title="Поиск клиентов" description="Формируйте запросы к открытым веб-источникам и сохраняйте проверенные компании." action={<span className="local-pill"><ShieldCheck size={14}/> Без сервера</span>}/>
     <div className="research-layout"><section className="panel research-form-panel"><div className="panel-heading"><div><h3>Параметры поиска</h3><p>Уточните профиль потенциального клиента</p></div><div className="panel-heading-icon"><ListFilter size={18}/></div></div>
       <label className="field"><span>Отрасль / тип компании</span><select value={sector} onChange={e => setSector(e.target.value)}><option>Строительство и подрядчики</option><option>Генеральные подрядчики</option><option>Ремонтные компании</option><option>Управляющие компании недвижимости</option><option>Коммерческая недвижимость</option><option>Архитектурные бюро</option><option>Производственные компании</option><option>Другая отрасль</option></select></label>
       <label className="field"><span>Регион</span><select value={region} onChange={e => setRegion(e.target.value)}><option>Москва и Московская область</option><option>Санкт-Петербург и область</option><option>Вся Россия</option><option>Казань</option><option>Екатеринбург</option><option>Новосибирск</option></select></label>
-      <label className="field"><span>Дополнительные ключевые слова</span><input value={keywords} onChange={e => setKeywords(e.target.value)} placeholder="Например: коммерческие объекты, тендеры"/></label>
+      <label className="field"><span>Цель поиска</span><select value={intent} onChange={e => setIntent(e.target.value)}>{Object.keys(intentTerms).map(value => <option key={value}>{value}</option>)}</select></label>
+      <label className="field"><span>Дополнительные ключевые слова</span><input value={keywords} onChange={e => setKeywords(e.target.value)} placeholder="Например: коммерческие объекты, офисы"/></label>
       <label className="field"><span>Источник поиска</span><select value={source} onChange={e => setSource(e.target.value)}><option>Веб-поиск</option><option>Google</option><option>Bing</option><option>Яндекс</option></select></label>
-      <div className="research-note"><ShieldCheck size={16}/><p>Поиск открывает выбранный веб-запрос. Автоматический обход сайтов и проверка контактов — отдельные функции следующих этапов.</p></div>
+      <div className="research-note"><ShieldCheck size={16}/><p>Запрос формируется под выбранную задачу. Результаты открываются в браузере; автоматический сбор и проверка контактов будут отдельным этапом.</p></div>
+      <div className="panel" style={{padding: "12px 14px", marginBottom: 12}}><span style={{display:"block",fontSize:11,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:6,opacity:.7}}>Предпросмотр запроса</span><p style={{fontSize:13,lineHeight:1.5,margin:0,overflowWrap:"anywhere"}}>{query}</p></div>
       <button className="button button-primary full-button" onClick={run}><Search size={16}/> Найти компании <ArrowRight size={16}/></button>
     </section>
     <section className="research-aside"><div className="research-visual"><div className="visual-grid"/><div className="visual-target"><div/><div/><div/><Target size={34}/></div><div className="floating-chip chip-top"><span className="chip-dot"/>{source}</div><div className="floating-chip chip-bottom"><Building2 size={15}/> B2B · Компании</div></div><div className="panel workflow-panel"><h3>Как устроен процесс</h3>{[{n:"01",title:"Найдите компании",desc:"Сформируйте точный поисковый запрос"},{n:"02",title:"Проверьте источник",desc:"Откройте сайт и подтвердите сведения"},{n:"03",title:"Сохраните в базу",desc:"Добавьте компанию и следующий шаг"}].map(s => <div className="workflow-step" key={s.n}><span>{s.n}</span><div><b>{s.title}</b><small>{s.desc}</small></div></div>)}<button className="text-button" onClick={onSave}>Добавить компанию вручную <Plus size={15}/></button></div></section></div>
