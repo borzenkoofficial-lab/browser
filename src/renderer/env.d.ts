@@ -10,7 +10,7 @@ declare global {
       setBounds(id: string, bounds: { x: number; y: number; width: number; height: number } | null): Promise<void>;
       closeTab(id: string): Promise<void>;
       getTabState(id: string): Promise<{ url: string; title: string; loading: boolean } | null>;
-      extractPage(id: string): Promise<{ url: string; title: string; description: string; text: string }>;
+      extractPage(id: string): Promise<{ url: string; title: string; description: string; text: string; headings: string[]; formFields: Array<{ label: string; value: string; type: string }>; links: Array<{ text: string; url: string }>; tables: string[] }>;
       listProspects(): Promise<unknown[]>;
       saveProspects(records: unknown[]): Promise<boolean>;
       listBookmarks(): Promise<unknown[]>;
