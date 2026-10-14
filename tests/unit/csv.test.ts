@@ -29,9 +29,9 @@ describe("prospect CSV import", () => {
   });
 
   it("imports prospect tags from Russian and English CSV headers", () => {
-    const rows = parseProspectsCsv('Компания;Метки\\nООО Строй;"генподрядчик, тендер"');
+    const rows = parseProspectsCsv('Компания;Метки\nООО Строй;"генподрядчик, тендер"');
     expect(rows[0].tags).toEqual(["генподрядчик", "тендер"]);
-    const english = parseProspectsCsv('Company,Tags\\nAcme,"priority, contractor"');
+    const english = parseProspectsCsv('Company,Tags\nAcme,"priority, contractor"');
     expect(english[0].tags).toEqual(["priority", "contractor"]);
   });
 
