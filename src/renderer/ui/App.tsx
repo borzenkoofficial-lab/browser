@@ -38,6 +38,7 @@ function App() {
   const [version, setVersion] = useState("0.1.0");
   const [toast, setToast] = useState("");
   const [sidebarCompact, setSidebarCompact] = useState(false);
+  const [storageBusy, setStorageBusy] = useState(false);
   const [form, setForm] = useState({ company: "", website: "", contact: "", email: "", phone: "", industry: "Строительство", status: "Новый" as Prospect["status"], source: "Сайт компании", notes: "" });
   const viewportRef = useRef<HTMLDivElement>(null);
   const active = tabs.find(tab => tab.id === activeTab) ?? null;
@@ -100,6 +101,39 @@ function App() {
     }
     if (activeTab) requestAnimationFrame(syncBounds);
   }, [activeTab, tabs, syncBounds]);
+
+  const createBackup = async () => {
+    setStorageBusy(true);
+    try {
+      const result = await window.nexus.createBackup();
+      if (result.cancelled) return;
+      notify(result.integrity === "ok" ? "Резервная копия создана и проверена" : "Резервная копия создана");
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Не удалось создать резервную копию");
+    } finally {
+      setStorageBusy(false);
+    }
+  };
+
+  const restoreBackup = async () => {
+    if (!confirm("Восстановление заменит текущие компании, закладки и историю данными из выбранной копии. Перед заменой будет создана страховочная копия. Продолжить?")) return;
+    setStorageBusy(true);
+    try {
+      const result = await window.nexus.restoreBackup();
+      if (result.cancelled) return;
+      const [nextProspects, nextBookmarks, nextHistory] = await Promise.all([
+        window.nexus.listProspects(), window.nexus.listBookmarks(), window.nexus.listHistory()
+      ]);
+      setProspects(nextProspects as Prospect[]);
+      setBookmarks(nextBookmarks as BookmarkItem[]);
+      setHistory(nextHistory as HistoryItem[]);
+      notify("Данные восстановлены; страховочная копия создана");
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Не удалось восстановить резервную копию");
+    } finally {
+      setStorageBusy(false);
+    }
+  };
 
   const persistProspects = async (next: Prospect[]) => {
     setProspects(next);
@@ -342,7 +376,7 @@ function App() {
           {section === "prospects" && <ProspectsPage prospects={filtered} query={prospectQuery} setQuery={setProspectQuery} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onAdd={() => { resetForm(); setEditing(null); setShowAdd(true); }} onEdit={editProspect} onDelete={id => { if (confirm("Удалить компанию из локальной базы?")) void persistProspects(prospects.filter(p => p.id !== id)); }} onExport={exportCsv} onOpen={url => void openTab(url)} onImport={importCsv}/>}
           {section === "saved" && <SavedPage bookmarks={bookmarks} prospects={prospects} onOpen={url => void openTab(url)} onSection={goSection} onRemoveBookmark={id => void removeBookmark(id)}/>}
           {section === "history" && <HistoryPage history={history} onOpen={url => void openTab(url)} onClear={clearHistory}/>}
-          {section === "settings" && <SettingsPage version={version}/>}
+          {section === "settings" && <SettingsPage version={version} storageBusy={storageBusy} onBackup={() => void createBackup()} onRestore={() => void restoreBackup()}/>}
         </div>}
       </div>
       <footer className="status-bar"><span><span className="status-light"/> NEXUS работает локально</span>{pageError && <span className="error-status">{pageError}</span>}<span>Версия {version} <span className="status-separator">·</span> Данные остаются на этом устройстве</span></footer>
@@ -464,12 +498,14 @@ function HistoryPage({ history, onOpen, onClear }: { history: HistoryItem[]; onO
   </div>;
 }
 
-function SettingsPage({ version }: { version: string }) {
+function SettingsPage({ version, storageBusy, onBackup, onRestore }: {
+  version: string; storageBusy: boolean; onBackup: () => void; onRestore: () => void;
+}) {
   return <div className="standard-page"><PageHeader eyebrow="ПЕРСОНАЛИЗАЦИЯ" title="Настройки" description="Параметры приложения и хранения данных."/>
-    <div className="settings-grid"><section className="panel settings-card"><div className="settings-card-icon"><ShieldCheck size={20}/></div><div><h3>Приватность и данные</h3><p>Клиентские карточки хранятся локально в профиле приложения. Передача данных в облако сейчас не используется.</p><span className="setting-status"><span className="status-light"/> Локальное хранение включено</span></div></section>
+    <div className="settings-grid"><section className="panel settings-card"><div className="settings-card-icon"><ShieldCheck size={20}/></div><div><h3>Приватность и данные</h3><p>Компании, закладки и история хранятся локально в SQLite в профиле приложения. Передача данных в облако сейчас не используется.</p><span className="setting-status"><span className="status-light"/> Локальное хранение включено</span></div></section>
     <section className="panel settings-card"><div className="settings-card-icon"><Command size={20}/></div><div><h3>Версия приложения</h3><p>NEXUS Business Browser — ранняя разработка. Функции будут добавляться поэтапно.</p><span className="version-pill">Версия {version}</span></div></section>
     <section className="panel settings-card"><div className="settings-card-icon"><Sparkles size={20}/></div><div><h3>Провайдер ИИ</h3><p>Подключение ИИ для анализа страниц появится отдельным модулем. Ключи API не нужно вводить в этой версии.</p><span className="soon-label">Запланировано</span></div></section>
-    <section className="panel settings-card"><div className="settings-card-icon"><Download size={20}/></div><div><h3>Резервное копирование</h3><p>Пока доступен экспорт списка компаний в CSV. Полное резервное копирование профиля будет добавлено позже.</p><span className="soon-label">Запланировано</span></div></section></div>
+    <section className="panel settings-card"><div className="settings-card-icon"><Download size={20}/></div><div><h3>Резервное копирование</h3><p>Создавайте проверенную резервную копию базы SQLite или восстанавливайте данные из ранее созданной копии. Перед восстановлением приложение автоматически создаёт страховочную копию текущей базы.</p><div className="settings-actions"><button className="primary-button" disabled={storageBusy} onClick={onBackup}>{storageBusy ? "Выполняется…" : "Создать копию"}</button><button className="secondary-button" disabled={storageBusy} onClick={onRestore}>Восстановить из копии</button></div></div></section></div>
   </div>;
 }
 
