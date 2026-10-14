@@ -131,6 +131,12 @@ ipcMain.handle("browser:state", (_event, id: string) => {
   if (!view) return null;
   return { url: view.webContents.getURL(), title: view.webContents.getTitle(), loading: view.webContents.isLoading() };
 });
+ipcMain.handle("browser:extract", async (_event, id: string) => {
+  const view = browserViews.get(id);
+  if (!view) throw new Error("Вкладка не найдена");
+  const page = await view.webContents.executeJavaScript("({ title: document.title || '', description: document.querySelector(\'meta[name=\\\"description\\\"]\')?.content || '', emails: [...new Set((document.body?.innerText || '').match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\\\.[A-Z]{2,}/gi) || [])].slice(0, 5), phones: [...new Set((document.body?.innerText || '').match(/(?:\\\\+?\\\\d[\\\\d\\\\s().-]{7,}\\\\d)/g) || [])].slice(0, 5) })");
+  return { url: view.webContents.getURL(), ...page };
+});
 ipcMain.handle("prospects:list", readProspects);
 ipcMain.handle("bookmarks:list", () => readNamedData("bookmarks.json"));
 ipcMain.handle("bookmarks:save", (_event, records: unknown[]) => writeNamedData("bookmarks.json", records));
