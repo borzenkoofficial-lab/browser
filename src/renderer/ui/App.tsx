@@ -148,10 +148,27 @@ function App() {
     setAddress(value);
   };
 
-  const saveCurrentSite = () => {
+  const saveCurrentSite = async () => {
     if (!active) { notify("Сначала открой сайт компании"); return; }
-    let host = shortHost(active.url);
-    setForm(prev => ({ ...prev, company: prev.company || host, website: active.url, source: "Открытая вкладка" }));
+    const current = active;
+    const host = shortHost(current.url);
+    try {
+      const details = await window.nexus.extractPage(current.id);
+      const emails = [...new Set(details.text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi) || [])];
+      const phones = [...new Set(details.text.match(/(?:\\+?\\d[\\d\\s().-]{7,}\\d)/g) || [])];
+      setForm(prev => ({
+        ...prev,
+        company: prev.company || details.title || host,
+        website: current.url,
+        email: prev.email || emails[0] || "",
+        phone: prev.phone || phones[0] || "",
+        notes: prev.notes || details.description || "",
+        source: "Открытая вкладка"
+      }));
+    } catch {
+      setForm(prev => ({ ...prev, company: prev.company || host, website: current.url, source: "Открытая вкладка" }));
+      notify("Не удалось прочитать страницу — заполните карточку вручную");
+    }
     setEditing(null);
     setShowAdd(true);
   };
