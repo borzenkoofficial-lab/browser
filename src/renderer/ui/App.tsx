@@ -481,7 +481,7 @@ function App() {
     await historySaveQueueRef.current;
   };
 
-  const resetForm = () => setForm({ company: "", website: "", contact: "", email: "", phone: "", location: "Москва и Московская область", nextAction: "", followUpDate: "", industry: "Строительство", status: "Новый", source: "Сайт компании", notes: "", tags: "", activityType: "Звонок", activityNote: "" });
+  const resetForm = () => setForm({ company: "", website: "", contact: "", email: "", phone: "", location: "Москва и Московская область", nextAction: "", followUpDate: "", industry: "Строительство", status: "Новый", source: "Сайт компании", sourceUrl: "", sourceCapturedAt: "", notes: "", tags: "", activityType: "Звонок", activityNote: "" });
 
   const saveForm = async () => {
     if (!form.company.trim()) { notify("Укажите название компании"); return; }
