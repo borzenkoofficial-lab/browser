@@ -16,6 +16,7 @@ The current codebase is an early MVP foundation. It combines a Chromium-powered 
 - User-triggered SQLite backup and restore from Settings, with a safety backup before restore
 - Company cards with industry, contact details, status, source, tags, notes and a timestamped interaction timeline
 - Local estimate calculator with itemized customer prices, direct costs, gross profit and margin; estimates are stored in SQLite and included in database backups
+- Commercial proposal builder with three print templates, estimate-to-proposal flow, document status, validity date, terms, signature/stamp areas, and print-to-PDF through the system print dialog; documents are stored locally and included in backups
 - Explicit user-triggered extraction of page title, meta description, visible text, email and phone candidates to prefill a company card
 - Search workflow for construction, contractors, property managers and other B2B categories
 - Search provider selection for Google, Bing and Yandex
@@ -49,7 +50,7 @@ Use Settings → Backup to create a verified `.sqlite` backup, or restore from a
 
 - Search starts a query in the selected search engine; it does not crawl the web or bypass site restrictions.
 - Page extraction only runs when the user clicks **Save company**. Extracted emails and phone numbers are suggestions and must be verified before use.
-- No AI provider integration, cloud sync, team accounts, licensing server, PDF estimate export or automatic update service is implemented yet.
+- No AI provider integration, cloud sync, team accounts, licensing server, or automatic update service is implemented yet.
 - Browser extension compatibility, advanced download management, password synchronization and full browser-profile import/export are not implemented.
 - The installer is not code-signed. Windows SmartScreen warnings may occur.
 - The project has not yet been verified by a successful local Windows build. Treat CI results as authoritative once a run completes.
