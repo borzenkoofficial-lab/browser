@@ -8,6 +8,7 @@ let mainWindow: BrowserWindow | null = null;
 const browserViews = new Map<string, WebContentsView>();
 const viewBounds = new Map<string, { x: number; y: number; width: number; height: number }>();
 const dataFile = () => path.join(app.getPath("userData"), "prospects.json");
+const namedDataFile = (name: string) => path.join(app.getPath("userData"), name);
 
 async function readProspects(): Promise<unknown[]> {
   try { return JSON.parse(await fs.readFile(dataFile(), "utf8")) as unknown[]; }
@@ -16,6 +17,17 @@ async function readProspects(): Promise<unknown[]> {
 async function writeProspects(value: unknown[]): Promise<void> {
   await fs.mkdir(path.dirname(dataFile()), { recursive: true });
   await fs.writeFile(dataFile(), JSON.stringify(value, null, 2), "utf8");
+}
+async function readNamedData(name: string): Promise<unknown[]> {
+  if (!["bookmarks.json", "history.json"].includes(name)) throw new Error("Недопустимое хранилище");
+  try { return JSON.parse(await fs.readFile(namedDataFile(name), "utf8")) as unknown[]; }
+  catch { return []; }
+}
+async function writeNamedData(name: string, value: unknown[]): Promise<boolean> {
+  if (!["bookmarks.json", "history.json"].includes(name)) throw new Error("Недопустимое хранилище");
+  await fs.mkdir(app.getPath("userData"), { recursive: true });
+  await fs.writeFile(namedDataFile(name), JSON.stringify(value, null, 2), "utf8");
+  return true;
 }
 
 function createWindow() {
@@ -120,6 +132,10 @@ ipcMain.handle("browser:state", (_event, id: string) => {
   return { url: view.webContents.getURL(), title: view.webContents.getTitle(), loading: view.webContents.isLoading() };
 });
 ipcMain.handle("prospects:list", readProspects);
+ipcMain.handle("bookmarks:list", () => readNamedData("bookmarks.json"));
+ipcMain.handle("bookmarks:save", (_event, records: unknown[]) => writeNamedData("bookmarks.json", records));
+ipcMain.handle("history:list", () => readNamedData("history.json"));
+ipcMain.handle("history:save", (_event, records: unknown[]) => writeNamedData("history.json", records));
 ipcMain.handle("prospects:save", async (_event, records: unknown[]) => { await writeProspects(records); return true; });
 ipcMain.handle("app:version", () => app.getVersion());
 app.whenReady().then(createWindow);
