@@ -154,8 +154,8 @@ function App() {
     const host = shortHost(current.url);
     try {
       const details = await window.nexus.extractPage(current.id);
-      const emails = [...new Set(details.text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi) || [])];
-      const phones = [...new Set(details.text.match(/(?:\\+?\\d[\\d\\s().-]{7,}\\d)/g) || [])];
+      const emails = [...new Set(details.text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) || [])];
+      const phones = [...new Set(details.text.match(/(?:\+?\d[\d\s().-]{7,}\d)/g) || [])];
       setForm(prev => ({
         ...prev,
         company: prev.company || details.title || host,
