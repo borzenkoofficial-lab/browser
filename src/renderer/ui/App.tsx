@@ -722,6 +722,21 @@ function Research({ onSearch, onSave }: { onSearch: (q: string, source?: string)
   const [keywords, setKeywords] = useState("");
   const [source, setSource] = useState("Веб-поиск");
   const [intent, setIntent] = useState("Официальные сайты");
+  const [recentSearches, setRecentSearches] = useState<Array<{ query: string; source: string; intent: string; searchedAt: string }>>([]);
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem("nexus.businessBrowser.recentSearches.v1");
+      const parsed: unknown = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(parsed)) {
+        setRecentSearches(parsed.filter((item): item is { query: string; source: string; intent: string; searchedAt: string } =>
+          !!item && typeof item === "object" && typeof item.query === "string" && typeof item.source === "string" &&
+          typeof item.intent === "string" && typeof item.searchedAt === "string"
+        ).slice(0, 5));
+      }
+    } catch {
+      setRecentSearches([]);
+    }
+  }, []);
   const intentTerms: Record<string, string> = {
     "Официальные сайты": "официальный сайт компании",
     "Контакты": "контакты телефон email",
@@ -730,7 +745,17 @@ function Research({ onSearch, onSave }: { onSearch: (q: string, source?: string)
     "Партнёры и подрядчики": "партнёр подрядчик генподрядчик"
   };
   const query = [sector, region, keywords.trim(), intentTerms[intent]].filter(Boolean).join(" ");
-  const run = () => onSearch(query, source);
+  const run = () => {
+    const entry = { query, source, intent, searchedAt: new Date().toISOString() };
+    const next = [entry, ...recentSearches.filter(item => item.query !== query || item.source !== source)].slice(0, 5);
+    setRecentSearches(next);
+    try { window.localStorage.setItem("nexus.businessBrowser.recentSearches.v1", JSON.stringify(next)); } catch { /* Search can still proceed if local storage is unavailable. */ }
+    onSearch(query, source);
+  };
+  const clearRecentSearches = () => {
+    setRecentSearches([]);
+    try { window.localStorage.removeItem("nexus.businessBrowser.recentSearches.v1"); } catch { /* Ignore unavailable local storage. */ }
+  };
   return <div className="standard-page"><PageHeader eyebrow="ИССЛЕДОВАНИЕ РЫНКА" title="Поиск клиентов" description="Формируйте запросы к открытым веб-источникам и сохраняйте проверенные компании." action={<span className="local-pill"><ShieldCheck size={14}/> Без сервера</span>}/>
     <div className="research-layout"><section className="panel research-form-panel"><div className="panel-heading"><div><h3>Параметры поиска</h3><p>Уточните профиль потенциального клиента</p></div><div className="panel-heading-icon"><ListFilter size={18}/></div></div>
       <label className="field"><span>Отрасль / тип компании</span><select value={sector} onChange={e => setSector(e.target.value)}><option>Строительство и подрядчики</option><option>Генеральные подрядчики</option><option>Ремонтные компании</option><option>Управляющие компании недвижимости</option><option>Коммерческая недвижимость</option><option>Архитектурные бюро</option><option>Производственные компании</option><option>Другая отрасль</option></select></label>
@@ -743,6 +768,10 @@ function Research({ onSearch, onSave }: { onSearch: (q: string, source?: string)
       <button className="button button-primary full-button" onClick={run}><Search size={16}/> Найти компании <ArrowRight size={16}/></button>
     </section>
     <section className="research-aside"><div className="research-visual"><div className="visual-grid"/><div className="visual-target"><div/><div/><div/><Target size={34}/></div><div className="floating-chip chip-top"><span className="chip-dot"/>{source}</div><div className="floating-chip chip-bottom"><Building2 size={15}/> B2B · Компании</div></div><div className="panel workflow-panel"><h3>Как устроен процесс</h3>{[{n:"01",title:"Найдите компании",desc:"Сформируйте точный поисковый запрос"},{n:"02",title:"Проверьте источник",desc:"Откройте сайт и подтвердите сведения"},{n:"03",title:"Сохраните в базу",desc:"Добавьте компанию и следующий шаг"}].map(s => <div className="workflow-step" key={s.n}><span>{s.n}</span><div><b>{s.title}</b><small>{s.desc}</small></div></div>)}<button className="text-button" onClick={onSave}>Добавить компанию вручную <Plus size={15}/></button></div></section></div>
+    {recentSearches.length > 0 && <section className="panel" style={{marginTop: 18, padding: 16}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginBottom:10}}><div><h3 style={{margin:0}}>Недавние поиски</h3><p style={{margin:"4px 0 0",fontSize:12,opacity:.7}}>Последние 5 запросов сохранены на этом устройстве</p></div><button className="text-button" onClick={clearRecentSearches}>Очистить</button></div>
+      <div style={{display:"grid",gap:8}}>{recentSearches.map((item,index) => <div key={item.searchedAt + index} style={{display:"flex",alignItems:"center",gap:10,justifyContent:"space-between",padding:"10px 0",borderTop:"1px solid var(--border-color, rgba(127,127,127,.2))"}}><div style={{minWidth:0}}><b style={{display:"block",fontSize:12,marginBottom:4}}>{item.intent} · {item.source}</b><span style={{display:"block",fontSize:12,opacity:.8,overflowWrap:"anywhere"}}>{item.query}</span></div><button className="button button-secondary" onClick={() => onSearch(item.query, item.source)}><Search size={14}/> Повторить</button></div>)}</div>
+    </section>}
   </div>;
 }
 
