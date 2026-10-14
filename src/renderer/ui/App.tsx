@@ -154,9 +154,11 @@ function App() {
   const restoreBackup = async () => {
     if (!confirm("Восстановление заменит текущие компании, закладки, историю, сметы, документы, объекты, финансы и поставщиков данными из выбранной копии. Перед заменой будет создана страховочная копия. Продолжить?")) return;
     setStorageBusy(true);
+    let restoreApplied = false;
     try {
       const result = await window.nexus.restoreBackup();
       if (result.cancelled) return;
+      restoreApplied = true;
       const [nextProspects, nextBookmarks, nextHistory, nextEstimates, nextDocuments, nextObjects, nextFinance, nextSuppliers] = await Promise.all([
         window.nexus.listProspects(), window.nexus.listBookmarks(), window.nexus.listHistory(), window.nexus.listEstimates(), window.nexus.listDocuments(), window.nexus.listObjects(), window.nexus.listFinance(), window.nexus.listSuppliers()
       ]);
@@ -171,7 +173,11 @@ function App() {
       setSuppliers(nextSuppliers as Supplier[]);
       notify("Данные восстановлены; страховочная копия создана");
     } catch (error) {
-      notify(error instanceof Error ? error.message : "Не удалось восстановить резервную копию");
+      if (restoreApplied) {
+        notify("Резервная копия восстановлена, но интерфейс не смог перечитать данные. Перезапустите NEXUS.");
+      } else {
+        notify(error instanceof Error ? error.message : "Не удалось восстановить резервную копию");
+      }
     } finally {
       setStorageBusy(false);
     }
