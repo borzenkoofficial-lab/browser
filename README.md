@@ -18,6 +18,7 @@ The current codebase is an early MVP foundation. It combines a Chromium-powered 
 - Local estimate calculator with itemized customer prices, direct costs, gross profit and margin; estimates are stored in SQLite and included in database backups
 - Commercial proposal builder with three print templates, estimate-to-proposal flow, document status, validity date, terms, signature/stamp areas, and print-to-PDF through the system print dialog; documents are stored locally and included in backups
 - Production object tracking with estimate linkage, planned budget, daily shift reports, worker-hours, output, revenue, direct costs, productivity and actual gross-profit summaries
+- Local finance register for planned and paid income/expenses, categories, object linkage, period filtering, cashflow totals, receivables and planned expenses
 - Explicit user-triggered extraction of page title, meta description, visible text, email and phone candidates to prefill a company card
 - Search workflow for construction, contractors, property managers and other B2B categories
 - Search provider selection for Google, Bing and Yandex
@@ -39,7 +40,7 @@ npm run build
 npm run dist:win
 ```
 
-The Windows installer is generated under `release/`. The GitHub Actions workflow is configured to publish it as a workflow artifact after a successful Windows build. SQLite is provided by the portable `sql.js` WASM build, so no native Node/Electron module rebuild is required.
+The Windows installer is generated under `release/` only when explicitly built. The Windows installer CI job is skipped on normal pushes and pull requests; it runs only on manual workflow dispatch. Do not trigger it until an installer is requested. SQLite is provided by the portable `sql.js` WASM build, so no native Node/Electron module rebuild is required.
 
 ## Local data
 
